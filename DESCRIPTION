@@ -11,5 +11,7 @@ RoxygenNote: 6.0.1
 Imports: dplyr,
   lme4,
   stringr,
-  readr
+  readr,
+  magrittr
+
   
