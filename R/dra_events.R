@@ -24,8 +24,16 @@ export_events_data <- function(year_id, .data=NULL) {
     .data <- get_events_data(year_id)
   }
   df_name <- sprintf("dra_events_%d", year_id)
-  ofile <- sprintf("data/%s.RData", df_name)
+  ofile <- sprintf("inst/extdata/%s.rds", df_name)
   assign(df_name, .data)
-  save(list=df_name, file=ofile)
+  saveRDS(get(df_name), file=ofile)
+}
+
+#' @export
+load_events_data <- function(year_id) {
+  df_name <- sprintf("dra_events_%d", year_id)
+  ofile <- sprintf("%s/BProDRA/extdata/%s.rds", .libPaths()[[1]], df_name)
+  readRDS(ofile)
+
 }
 
