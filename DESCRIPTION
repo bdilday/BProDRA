@@ -1,0 +1,15 @@
+Package: BProDRA
+Title: Compute Baseball Prospectus' DRA Metric
+Version: 0.0.0.9000
+Authors@R: person("Dilday", "Ben", email = "ben.dilday.phd@gmail.com", role = c("aut", "cre"))
+Description: Compute Baseball Prospectus' DRA Metric.
+Depends: R (>= 3.3.2)
+License: MIT
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1
+Imports: dplyr,
+  lme4,
+  stringr,
+  readr
+  
