@@ -13,7 +13,7 @@ get_events_data <- function(year_id) {
 
   query1 <- paste("select * from retrosheet.events where "
                   ," (event_cd<=3 or event_cd>=20 or (event_cd>=14 and event_cd<=16)) "
-                  ,"")
+                  ," and year_id=", year_id)
 
   rs <- dbSendQuery(conn, query1)
   res1 = dbFetch(rs, n=-1)
@@ -22,10 +22,10 @@ get_events_data <- function(year_id) {
 export_events_data <- function(year_id, .data=NULL) {
   if (is.null(.data)) {
     .data <- get_events_data(year_id)
-    df_name <- sprintf("dra_events_%d", year_id)
-    ofile <- sprintf("data/%s.RData", df_name)
   }
+  df_name <- sprintf("dra_events_%d", year_id)
+  ofile <- sprintf("data/%s.RData", df_name)
   assign(df_name, .data)
-  save(df_name, file=ofile)
+  save(list=df_name, file=ofile)
 }
 
