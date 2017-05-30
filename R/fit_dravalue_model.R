@@ -10,8 +10,10 @@ fit_dra_value_model <- function(.data, metric) {
 }
 
 #' @export
-export_dra_model <- function(.data, metric) {
-print(substitute(.data))
+export_dra_model <- function(.data, metric, year) {
+  ofile = sprintf('./inst/extdata/glmer_mod_%s_%d.rds', metric, year)
+  glmer_mod <- fit_dra_value_model(.data, metric)
+  saveRDS(glmer_mod, file=ofile)
 }
 
 #' @export
@@ -27,8 +29,6 @@ get_dra_model_data <- function(.data, metric="HR") {
   tmp <- .data %>% group_by(GAME_ID, PIT_ID) %>%
     mutate(min_pa=min(GAME_PA_CT), PIT_PA_CT=GAME_PA_CT-min_pa, TTO=(PIT_PA_CT %/% 9) + 1 ) %>%
     ungroup()
-
-
 
   if (metric =='HR') {
     tmp$outcome = ifelse(tmp$EVENT_CD==23, 1, 0)
@@ -81,7 +81,8 @@ get_dra_model_data <- function(.data, metric="HR") {
     stop(sprintf("unknown metric: %s", metric))
   }
 
-  tmp <- tmp %>% transmute(outcome=outcome,
+  tmp <- tmp %>% transmute(GAME_ID=GAME_ID,
+                           outcome=outcome,
                            pitcher_hitting=ifelse(BAT_FLD_CD==1, TRUE, FALSE),
                            role=PIT_START_FL,
                            bats=BAT_HAND_CD, throws=PIT_HAND_CD,

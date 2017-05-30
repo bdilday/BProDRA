@@ -1,6 +1,6 @@
 
 
-## import RMySQL
+#' @import RMySQL
 #'
 #' @importFrom readr read_csv
 
