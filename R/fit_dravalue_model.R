@@ -37,9 +37,11 @@ get_dra_model_data <- function(.data, metric="HR") {
   } else if (metric == '2B') {
     tmp$outcome = ifelse(tmp$EVENT_CD==21, 1, 0)
   } else if (metric == '1B_IF') {
-    tmp$outcome = ifelse(tmp$EVENT_CD==20, 1, 0)
+    tmp$outcome = ifelse(
+      (tmp$EVENT_CD==20) & (grepl('^S[1-6]{1}', tmp$EVENT_TX)) , 1, 0)
   } else if (metric == '1B_OF') {
-    tmp$outcome = ifelse(tmp$EVENT_CD==20, 1, 0)
+    tmp$outcome = ifelse(
+      (tmp$EVENT_CD==20) & (grepl('^S[7-9]{1}', tmp$EVENT_TX)), 1, 0)
   } else if (metric == 'UIBB') {
     tmp$outcome = ifelse(tmp$EVENT_CD==14, 1, 0)
   } else if (metric == 'IBB') {
@@ -48,6 +50,33 @@ get_dra_model_data <- function(.data, metric="HR") {
     tmp$outcome = ifelse(tmp$EVENT_CD==16, 1, 0)
   } else if (metric == 'SO') {
     tmp$outcome = ifelse(tmp$EVENT_CD==3, 1, 0)
+  }  else if (metric == 'Pitcher_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 1, 1, 0)
+  }  else if (metric == 'Catcher_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 2, 1, 0)
+  }  else if (metric == 'First_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 3, 1, 0)
+  }  else if (metric == 'Second_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 4, 1, 0)
+  }  else if (metric == 'Third_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 5, 1, 0)
+  }  else if (metric == 'Short_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 6, 1, 0)
+  }  else if (metric == 'LF_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 7, 1, 0)
+  }  else if (metric == 'CF_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 8, 1, 0)
+  }  else if (metric == 'RF_PO') {
+    tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
+    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 9, 1, 0)
   } else {
     stop(sprintf("unknown metric: %s", metric))
   }
@@ -81,7 +110,8 @@ get_dra_model_data <- function(.data, metric="HR") {
                            home_team=as.factor(BAT_HOME_ID),
                            base_outs = as.factor(base_outs),
                            fld_team = ifelse(BAT_HOME_ID==1, AWAY_TEAM_ID, HOME_TEAM_ID),
-                           TTO=TTO
+                           TTO=TTO,
+                           assist=as.factor(ASS1_FLD_CD)
   )
 }
 
@@ -89,23 +119,34 @@ get_dra_model_data <- function(.data, metric="HR") {
 #' @export
 get_dra_model_frm <-function(metric) {
   if (metric == 'HR') {
+    #TODO: add temperature, framing
     outcome ~ role + bats + throws + (1|pitcher) + (1|stadium) + (1|pitcher_hitting) + (1|batter) + (1|catcher)
   } else if (metric == '3B') {
+    #TODO: what is IF-fld?
     outcome ~ (1|batter) + (1|stadium:bats) + (1|Pos_3) + (1|Pos_4) + (1|Pos_7) + (1|Pos_8) + (1|pitcher)
   } else if (metric == '2B') {
+    #TODO: add IF-fld (what is it?)
     outcome ~ (1|pitcher) + (1|batter) + (1|Pos_4) + (1|Pos_5) + (1|Pos_7) + (1|Pos_8) + (1|stadium:bats) + inning_10
   } else if (metric == '1B_IF') {
     outcome ~ bats + throws + (1|pitcher) + (1|batter) + (1|Pos_3) + (1|Pos_4) + (1|Pos_5) + (1|Pos_6)
   } else if (metric == '1B_OF') {
     outcome ~ bats + throws + (1|pitcher) + (1|batter) + (1|Pos_5) + (1|Pos_7) + (1|Pos_8) + (1|Pos_9)
   } else if (metric == 'UIBB') {
+    # TODO: add framing
     outcome ~ (1|batter) + (1|pitcher) + (1|Pos_2) + (1|pitcher_hitting) + (1|base_outs) + bats + throws + tto + home_team
   } else if (metric == 'IBB') {
     outcome ~ bats + throws + role + inning_10 + score_diff + (1|batter) + (1|pitcher) + (1|open_1B_outs) + (1|Pos_2) + (1|fld_team)
   } else if (metric == 'HBP') {
     outcome ~ bats + throws + role + (1|batter) + (1|pitcher) + (1|base_outs) + (1|fld_team)
   }  else if (metric == 'SO') {
+    # TODO: add framing
     outcome ~ (1|batter) + (1|pitcher) + (1|Pos_2) + (1|pitcher_hitting) + (1|base_outs) + bats + throws + tto + home_team
+  }  else if (metric == 'Pitcher_PO') {
+    # TODO: what is assist? is it a position cd, or a player id? I think it's probably a player, otherwise making it a random effect doesn't make sense
+    outcome ~ (1|batter) + (1|pitcher) + (1|Pos_3) + (1|assist) + bats + throws
+  }  else if (metric == 'Catcher_PO') {
+    # TODO: what is assist? is it a position cd, or a player id? I think it's probably a player, otherwise making it a random effect doesn't make sense
+    outcome ~ (1|batter) + (1|pitcher) + (1|Pos_2) + (1|base_outs) + bats + throws
   } else {
     stop(sprintf("unknown metric: %s", metric))
   }
