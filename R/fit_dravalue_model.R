@@ -6,7 +6,10 @@
 fit_dra_value_model <- function(.data, metric, nagc=0) {
   mod_df <- get_dra_model_data(.data, metric)
   frm <- get_dra_model_frm(metric)
-  glmer_mod <- glmer(frm, data=mod_df, nAGQ = nagc, family = binomial)
+  glmer_mod <- glmer(frm, data=mod_df,
+                     nAGQ = nagc,
+                     family = binomial,
+                     control=glmerControl(optimizer = "nloptwrap"))
 }
 
 loop_export <- function(.data, metrics, year, nagc) {
@@ -57,42 +60,70 @@ get_dra_model_data <- function(.data, metric="HR") {
     tmp$outcome = ifelse(tmp$EVENT_CD==16, 1, 0)
   } else if (metric == 'SO') {
     tmp$outcome = ifelse(tmp$EVENT_CD==3, 1, 0)
+
   }  else if (metric == 'Pitcher_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 1, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 1) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'Catcher_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 2, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 2) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'First_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 3, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 3) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'Second_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 4, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 4) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'Third_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 5, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 5) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'Short_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 6, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 6) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'LF_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 7, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 7) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'CF_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 8, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 8) & (tmp$EVENT_CD == 2), 1, 0)
+
   }  else if (metric == 'RF_PO') {
     tmp <- tmp %>% filter(EVENT_OUTS_CT <= 1)
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 9, 1, 0)
+    tmp$outcome = ifelse( (tmp$PO1_FLD_CD == 9) & (tmp$EVENT_CD == 2), 1, 0)
+
+  } else if (metric == "PO") {
+    tmp$outcome = ifelse( (tmp$EVENT_CD == 2) & (tmp$EVENT_OUTS_CT <= 1), 1, 0)
+
 
   }  else if (metric == 'Pitcher_DP') {
-    tmp$outcome = ifelse(tmp$PO1_FLD_CD == 9, 1, 0)
+    tmp$outcome = ifelse( (tmp$ASS1_FLD_CD == 1) & (tmp$EVENT_OUTS_CT == 2) & (tmp$EVENT_CD == 2), 1, 0)
+  }  else if (metric == 'Catcher_DP') {
+    tmp$outcome = ifelse( (tmp$ASS1_FLD_CD == 2) & (tmp$EVENT_OUTS_CT == 2) & (tmp$EVENT_CD == 2), 1, 0)
+  }  else if (metric == 'First_DP') {
+    tmp$outcome = ifelse( (tmp$ASS1_FLD_CD == 3) & (tmp$EVENT_OUTS_CT == 2) & (tmp$EVENT_CD == 2), 1, 0)
+  }  else if (metric == 'Second_DP') {
+    tmp$outcome = ifelse( (tmp$ASS1_FLD_CD == 4) & (tmp$EVENT_OUTS_CT == 2) & (tmp$EVENT_CD == 2), 1, 0)
+  }  else if (metric == 'Third_DP') {
+    tmp$outcome = ifelse( (tmp$ASS1_FLD_CD == 5) & (tmp$EVENT_OUTS_CT == 2) & (tmp$EVENT_CD == 2), 1, 0)
+  }  else if (metric == 'Short_DP') {
+    tmp$outcome = ifelse( (tmp$ASS1_FLD_CD == 6) & (tmp$EVENT_OUTS_CT == 2) & (tmp$EVENT_CD == 2), 1, 0)
+
+  } else if (metric == "DP") {
+    tmp$outcome = ifelse( (tmp$EVENT_CD == 2) & (tmp$EVENT_OUTS_CT >= 2), 1, 0)
+
   } else {
     stop(sprintf("unknown metric: %s", metric))
   }
 
   tmp <- tmp %>% transmute(GAME_ID=GAME_ID,
                            EVENT_ID=EVENT_ID,
+                           EVENT_CD=EVENT_CD,
                            outcome=outcome,
                            pitcher_hitting=ifelse(BAT_FLD_CD==1, TRUE, FALSE),
                            role=PIT_START_FL,
@@ -119,7 +150,7 @@ get_dra_model_data <- function(.data, metric="HR") {
                                     paste0('0', tmp$OUTS_CT))
                            ),
                            base1_run_id=BASE1_RUN_ID,
-                           fld_team = ifelse(BAT_HOME_ID==1, AWAY_TEAM_ID, HOME_TEAM_ID),
+                           base2_run_id=BASE2_RUN_ID,
                            home_team=as.factor(BAT_HOME_ID),
                            base_outs = as.factor(base_outs),
                            fld_team = ifelse(BAT_HOME_ID==1, AWAY_TEAM_ID, HOME_TEAM_ID),
@@ -182,6 +213,29 @@ get_dra_model_frm <-function(metric) {
 
   }  else if (metric == 'RF_PO') {
     outcome ~ (1|batter) + (1|pitcher) + (1|Pos_9) + (1|Pos_8) + (1|stadium) + bats + throws
+
+  }  else if (metric == 'PO') {
+    outcome ~ (1|batter) + (1|pitcher) + (1|Pos_2) + (1|Pos_3) +
+      (1|Pos_4) + (1|Pos_5) + (1|Pos_6) + (1|Pos_7) + (1|Pos_8) + (1|Pos_9) +
+      (1|stadium) + bats + throws
+
+  }  else if (metric == 'Pitcher_DP') {
+    outcome ~ (1|pitcher) + (1|batter) + (1|base1_run_id)
+  }  else if (metric == 'Catcher_DP') {
+    outcome ~ (1|pitcher) + (1|Pos_2) + (1|Pos_3) + (1|Pos_4) + (1|base1_run_id) + throws
+  }  else if (metric == 'First_DP') {
+    outcome ~ (1|pitcher) + (1|batter) + (1|Pos_3) + (1|Pos_4) + (1|Pos_6) + (1|base1_run_id) + bats + throws
+  }  else if (metric == 'Second_DP') {
+    outcome ~ (1|pitcher) + (1|batter) + (1|Pos_4) + (1|Pos_6) + (1|base1_run_id) + (1|base2_run_id) + bats
+  }  else if (metric == 'Third_DP') {
+    outcome ~ (1|pitcher) + (1|batter) + (1|Pos_3) + (1|Pos_5) + (1|stadium) + (1|base1_run_id) + (1|base2_run_id) + bats
+  }  else if (metric == 'Short_DP') {
+    outcome ~ (1|pitcher) + (1|batter) + (1|Pos_3) + (1|Pos_4) + (1|Pos_6) + (1|stadium) + (1|base1_run_id) + bats + throws
+
+  }  else if (metric == 'DP') {
+    outcome ~ (1|batter) + (1|pitcher) + (1|Pos_2) + (1|Pos_3) +
+      (1|Pos_4) + (1|Pos_5) + (1|Pos_6) + (1|Pos_7) + (1|Pos_8) + (1|Pos_9) +
+      (1|stadium) + bats + throws
 
   } else {
     stop(sprintf("unknown metric: %s", metric))
