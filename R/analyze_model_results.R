@@ -8,6 +8,26 @@ ranef_to_df <- function(glmer_mod, ranef_name) {
   dplyr::data_frame(var_id=rownames(rr), value=rr[,1])
 }
 
+
+#' @export
+average_ranef <-function(mod, pit_id, ranef_name) {
+  rrb = ranef_to_df(mod, ranef_name)
+  cc = mod@frame$pitcher == pit_id
+  mod@frame[cc,] %>% merge(rrb, by.x=ranef_name, by.y="var_id") %$% mean(value)
+}
+
+#' @export
+summarise_ranef <- function(mod, pit_id) {
+  df1 <- mod@frame
+  cc = df1$pitcher == pit_id
+  ranef_name <- names(lme4::ranef(mod))
+  data_frame(ranef_name=ranef_name,
+             mean_value=sapply(ranef_name, function(r) {
+               average_ranef(mod, pit_id, r)}
+               )
+             )
+}
+
 #' @export
 load_comparison_metrics <- function() {
   readRDS(sprintf('%s/BProDRA/inst/extdata/pitching_metric_throwdown.rds', .libPaths()[[1]]))
@@ -106,11 +126,8 @@ get_dra_runs <- function(event_data, mods, pit_id, pitcher_ranef_df=NULL, delta_
   lw <- get_linear_weights()
   tt = colSums(delta_probs) * c(data.matrix(lw))
 
-  df1 = data_frame()
-  for (i in seq_along(tt)) {
-    df1[[names(mods)[[i]]]] = tt[[i]]
-  }
-  df1
+  data_frame(event_type=names(mods), dra_runs=tt)
+
 }
 
 #' @export
