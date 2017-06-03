@@ -12,6 +12,7 @@ fit_dra_value_model <- function(.data, metric, nagc=0) {
                      control=glmerControl(optimizer = "nloptwrap"))
 }
 
+
 loop_export <- function(.data, metrics, year, nagc) {
   for (metric in metrics) {
     print(paste0("metric: ", metric))

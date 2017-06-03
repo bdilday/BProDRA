@@ -21,7 +21,8 @@ shinyUI(fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("year", "year", c(2007, 2016), selected = NULL, multiple = FALSE,
-                  selectize = TRUE, width = NULL, size = NULL)
+                  selectize = TRUE, width = NULL, size = NULL),
+      htmlOutput("selectUI")
     ),
 
     # Show a plot of the generated distribution

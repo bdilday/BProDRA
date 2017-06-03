@@ -19,7 +19,6 @@ pitcher_ranef_list <- list()
    key <- as.character(year)
   cat(sprintf("year: %d", year))
   mods_list[[key]] <- BProDRA::load_fitted_dra_models(year)
-  pitcher_ranef_list[[key]] <- BProDRA::extract_pitcher_ranef(mods_list[[key]])
 #   pitcher_ranef_list[[key]] <- data.frame(x=1:10)
     }
 
@@ -34,9 +33,17 @@ shinyServer(function(input, output) {
     # sprintf("year: %s nrow: d", year, nrow(fit_df))
   })
 
+  output$selectUI<-renderUI({
+    pit_id_list <- unique(pitcher_ranef_list[[input$year]]$var_id)
+    selectInput("nana", "select nana", pit_id_list)
+  })
 
   output$distPlot <- renderPlot({
     year = input$year
+    if (! year %in% pitcher_ranef_list) {
+      pitcher_ranef_list[[year]] <- BProDRA::extract_pitcher_ranef(mods_list[[year]])
+    }
+
     fit_df <- pitcher_ranef_list[[year]]
     fit_df %>%
       dplyr::mutate(p=exp(value)/(1+exp(value))) %>%
