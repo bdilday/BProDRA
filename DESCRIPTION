@@ -12,5 +12,4 @@ Imports: dplyr,
   lme4,
   stringr,
   readr,
-  magrittr,
-    Lahman
+  magrittr

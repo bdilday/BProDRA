@@ -10,6 +10,7 @@
 library(shiny)
 library(dplyr)
 library(ggplot2)
+library(BProDRA)
 
 print("hey ho, let's go")
 mods_list <- list()
