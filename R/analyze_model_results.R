@@ -2,7 +2,7 @@
 
 #' @importFrom magrittr %$%
 #' @import dplyr
-#' @importFrom lme4 ranef
+#' @import lme4
 #' @export
 ranef_to_df <- function(glmer_mod, ranef_name) {
   rr = lme4::ranef(glmer_mod)[[ranef_name]]
