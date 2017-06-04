@@ -77,19 +77,29 @@ pool_predictions <- function(event_data, mods, predict_type='response') {
 #' @export
 get_linear_weights <- function() {
 
+  out_val = -0.3
+
   data_frame(`1B_IF`=0.6,
        `1B_OF`=0.6,
        `2B`=0.95,
        `3B`=1.3,
-       "Catcher_PO"=-0.3,
-       "DP"=-0.6,
-       "HBP"=0.4,
        "HR"=1.7,
+       "Catcher_PO"=out_val,
+       "CF_PO"=-0.3,
+       "DP"=-0.6,
+       "First_PO"=out_val,
+       "HBP"=0.4,
        "IBB"=0.4,
-       "PO"=-0.3,
-       "Pitcher_PO"=-0.3,
-       "SO"=-0.3,
-       "UIBB"=0.4)
+       "LF_PO"=out_val,
+       "PO"=out_val,
+       "Pitcher_PO"=out_val,
+       "SO"=out_val,
+       "UIBB"=0.4,
+       "RF_PO"=out_val,
+       "Second_PO"=out_val,
+       "Short_PO"=out_val,
+       "Third_PO"=out_val
+       )
 
 }
 
@@ -119,12 +129,12 @@ get_delta_probs <- function(event_data, mods, pit_id, pitcher_ranef_df=NULL) {
 
 #' @export
 get_dra_runs <- function(event_data, mods, pit_id, pitcher_ranef_df=NULL, delta_probs=NULL) {
-  if (is.null(delta_probs)) {
+   if (is.null(delta_probs)) {
     delta_probs <- get_delta_probs(event_data, mods, pit_id, pitcher_ranef_df)
   }
 
   lw <- get_linear_weights()
-  tt = colSums(delta_probs) * c(data.matrix(lw))
+  tt = colSums(delta_probs) * c(data.matrix(lw[,names(mods)]))
 
   data_frame(event_type=names(mods), dra_runs=tt)
 
