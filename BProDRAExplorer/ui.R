@@ -27,9 +27,10 @@ shinyUI(fluidPage(
     # Show a plot of the generated distribution
     mainPanel(
        plotOutput("distPlot"),
-       textOutput("model_label"),
-       textOutput("pit_list_label"),
-       tableOutput("pitcher_components")
+#       textOutput("model_label"),
+#       textOutput("pit_list_label"),
+       tableOutput("pitcher_components"),
+       tableOutput("model_ranef")
     )
   )
 ))

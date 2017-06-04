@@ -1,5 +1,6 @@
 
 
+#' @importFrom magrittr %$%
 #' @import dplyr
 #' @importFrom lme4 ranef
 #' @export
@@ -12,13 +13,21 @@ ranef_to_df <- function(glmer_mod, ranef_name) {
 #' @export
 average_ranef <-function(mod, pit_id, ranef_name) {
   rrb = ranef_to_df(mod, ranef_name)
-  cc = mod@frame$pitcher == pit_id
-  mod@frame[cc,] %>% merge(rrb, by.x=ranef_name, by.y="var_id") %$% mean(value)
+  cc = as.character(mod@frame$pitcher) == as.character(pit_id)
+  x = sum(cc)
+  if (ranef_name %in% names(mod@frame[cc,])) {
+    tmp <- mod@frame[cc,] %>% merge(rrb, by.x=ranef_name, by.y="var_id")
+    mean(tmp$value)
+  } else {
+   0
+  }
+
 }
 
 #' @export
 summarise_ranef <- function(mod, pit_id) {
   df1 <- mod@frame
+  cat(names(df1))
   cc = df1$pitcher == pit_id
   ranef_name <- names(lme4::ranef(mod))
   data_frame(ranef_name=ranef_name,
@@ -61,15 +70,9 @@ extract_pitcher_ranef <- function(mods) {
 
 #' @export
 pool_predictions <- function(event_data, mods, predict_type='response') {
-  metrics <- c("HR", "3B", "2B", "1B_IF", "1B_OF", "UIBB", "IBB", "HBP", "SO",
-               "Pitcher_PO", "Catcher_PO", "First_PO", "Second_PO", "Third_PO", "Short_PO",
-               "LF_PO", "CF_PO", "RF_PO",
-               "Pitcher_DP", "Catcher_DP",
-               "First_DP", "Second_DP", "Third_DP", "Short_DP")
-
   vv = get_dra_model_data(event_data, "HR")
   purrr::reduce(lapply(names(mods), function(mod_key) {
-    print(mod_key);
+   # print(mod_key);
     predict(mods[[mod_key]], vv, type=predict_type, allow.new.levels=TRUE)}), cbind)
 
 }
