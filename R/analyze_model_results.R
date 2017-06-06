@@ -9,6 +9,49 @@ ranef_to_df <- function(glmer_mod, ranef_name) {
   dplyr::data_frame(var_id=rownames(rr), value=rr[,1])
 }
 
+#' @export
+export_dra_results <- function(year) {
+  print('loading events...')
+  ev <- load_events_data(year)
+  pit_ids <- unique(ev$PIT_ID)
+  print('loading mods...')
+  mods <- load_fitted_dra_models(year)
+  print('getting pit ranef...')
+  pit_ranef <- extract_pitcher_ranef(mods)
+
+  npit <- 10
+
+  ll <- lapply(1:npit, function(idx) {
+    s <- pit_ids[[idx]]
+    print(sprintf("%04d %04d %s", idx, length(pit_ids), s))
+    get_dra_runs(ev, mods, s)}
+    )
+  dra_runs <- purrr::reduce(ll, rbind.data.frame)
+
+  print('getting summaries...')
+  model_names <- names(mods)
+
+  pit_id <- pit_ids[[1]]
+  npit = 10
+  ll <- lapply(1:npit, function(pit_id_idx) {
+    pit_id <- pit_ids[[pit_id_idx]]
+    print(sprintf("%04d %04d %s", pit_id_idx, npit, pit_id))
+    ll <- lapply(1:length(model_names),
+                 function(model_name_idx) {
+                   model_name <- model_names[[model_name_idx]]
+                   tmp <-summarise_ranef(mods[[model_name_idx]], pit_id)
+                   tmp$model_name <- model_name
+                   tmp
+                 })
+    purrr::reduce(ll, rbind.data.frame)
+  })
+
+
+  model_ranef <- purrr::reduce(ll, rbind.data.frame)
+  tmp <- list(pit_ranef=pit_ranef, dra_runs=dra_runs, model_ranef=model_ranef)
+  saveRDS(tmp, file=sprintf('./inst/extdata/dra_results_%d.rds', year))
+tmp
+}
 
 #' @export
 average_ranef <-function(mod, pit_id, ranef_name) {
@@ -27,10 +70,11 @@ average_ranef <-function(mod, pit_id, ranef_name) {
 #' @export
 summarise_ranef <- function(mod, pit_id) {
   df1 <- mod@frame
-  cat(names(df1))
+#  cat(names(df1))
   cc = df1$pitcher == pit_id
   ranef_name <- names(lme4::ranef(mod))
-  data_frame(ranef_name=ranef_name,
+  data_frame(pit_id=pit_id,
+             ranef_name=ranef_name,
              mean_value=sapply(ranef_name, function(r) {
                average_ranef(mod, pit_id, r)}
                )
