@@ -3,6 +3,7 @@
 export(average_ranef)
 export(dra_components_boxplot)
 export(export_dra_model)
+export(export_dra_results)
 export(extract_pitcher_ranef)
 export(fit_dra_value_model)
 export(get_delta_probs)

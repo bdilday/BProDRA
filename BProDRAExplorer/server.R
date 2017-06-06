@@ -16,6 +16,8 @@ print("hey ho, let's go")
 mods_list <- list()
 pitcher_ranef_list <- list()
 dra_events_list <- list()
+print(.libPaths()[[1]])
+print(list.files(.libPaths()[[1]]))
 
 for (year in c(2007, 2016)) {
   key <- as.character(year)
