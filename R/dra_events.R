@@ -5,8 +5,8 @@
 #' @importFrom readr read_csv
 
 get_events_data <- function(year_id) {
-  db.connection.info = read_csv('D:/one-offs/mlb/makeHOFData/secret.txt')
-  conn = dbConnect(MySQL(),
+  db.connection.info = readr::read_csv('D:/one-offs/mlb/makeHOFData/secret.txt')
+  conn = RMySQL::dbConnect(MySQL(),
                    user=db.connection.info$user,
                    password=db.connection.info$password,
                    dbname=db.connection.info$dbname)
@@ -15,8 +15,8 @@ get_events_data <- function(year_id) {
                   ," (event_cd<=3 or event_cd>=20 or (event_cd>=14 and event_cd<=16)) "
                   ," and year_id=", year_id)
 
-  rs <- dbSendQuery(conn, query1)
-  res1 = dbFetch(rs, n=-1)
+  rs <- RMySQL::dbSendQuery(conn, query1)
+  res1 = RMySQL::dbFetch(rs, n=-1)
 }
 
 export_events_data <- function(year_id, .data=NULL) {
