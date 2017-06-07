@@ -8,7 +8,9 @@ fit_dra_value_model <- function(.data, metric, nagc=0) {
   frm <- get_dra_model_frm(metric)
   glmer_mod <- glmer(frm, data=mod_df,
                      nAGQ = nagc,
-                     family = binomial)
+                     family = binomial,
+                     control=glmerControl(optimizer = "nloptwrap")
+                     )
 }
 
 
