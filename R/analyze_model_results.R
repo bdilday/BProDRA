@@ -24,8 +24,9 @@ export_dra_results <- function(year) {
   ll <- lapply(1:npit, function(idx) {
     s <- pit_ids[[idx]]
     print(sprintf("%04d %04d %s", idx, length(pit_ids), s))
-    get_dra_runs(ev, mods, s)}
-    )
+    tmp <- get_dra_runs(ev, mods, s)
+    tmp$pit_id <- s}
+  )
   dra_runs <- purrr::reduce(ll, rbind.data.frame)
 
   print('getting summaries...')
@@ -123,24 +124,35 @@ pool_predictions <- function(event_data, mods, predict_type='response') {
 #' @export
 get_linear_weights <- function() {
 
-  out_val = -0.3
+  woba_weights <- list(
+    HBP=0.7,
+    BB=0.7,
+    x1B=0.9,
+    x2B=1.25,
+    x3B=1.6,
+    x4B=2.0
+  )
+  woba_scale = 1.25
+  woba_scale_ = 1/woba_scale
+  out_val = -0.28
 
-  data_frame(`1B_IF`=0.6,
-       `1B_OF`=0.6,
-       `2B`=0.95,
-       `3B`=1.3,
-       "HR"=1.7,
+  lw <- lapply(lapply(woba_weights, `+`, out_val), `*`, woba_scale_)
+  data_frame(`1B_IF`=lw$x1B,
+       `1B_OF`=lw$x1B,
+       `2B`=lw$x2B,
+       `3B`=lw$x3B,
+       "HR"=lw$x4B,
        "Catcher_PO"=out_val,
-       "CF_PO"=-0.3,
-       "DP"=-0.6,
+       "CF_PO"=out_val,
+       "DP"=out_val*2,
        "First_PO"=out_val,
-       "HBP"=0.4,
-       "IBB"=0.4,
+       "HBP"=lw$HBP,
+       "IBB"=lw$BB,
        "LF_PO"=out_val,
        "PO"=out_val,
        "Pitcher_PO"=out_val,
        "SO"=out_val,
-       "UIBB"=0.4,
+       "UIBB"=lw$BB,
        "RF_PO"=out_val,
        "Second_PO"=out_val,
        "Short_PO"=out_val,
