@@ -14,10 +14,14 @@ fit_dra_value_model <- function(.data, metric, nagc=0) {
 }
 
 
-loop_export <- function(.data, metrics, year, nagc) {
+loop_export <- function(year, metrics=NULL, nagc=0) {
+  ev <- load_events_data(year)
+  if (is.null(metrics)) {
+    metrics <- readRDS('./inst/extdata/all_metrics.rds')
+  }
   for (metric in metrics) {
     print(paste0("metric: ", metric))
-    export_dra_model(.data, metric, year, nagc)
+    export_dra_model(ev, metric, year, nagc)
   }
 }
 

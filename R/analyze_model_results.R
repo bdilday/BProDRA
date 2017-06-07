@@ -10,7 +10,7 @@ ranef_to_df <- function(glmer_mod, ranef_name) {
 }
 
 #' @export
-export_dra_results <- function(year) {
+export_dra_results <- function(year, npit=NULL) {
   print('loading events...')
   ev <- load_events_data(year)
   pit_ids <- unique(ev$PIT_ID)
@@ -19,20 +19,23 @@ export_dra_results <- function(year) {
   print('getting pit ranef...')
   pit_ranef <- extract_pitcher_ranef(mods)
 
-  npit <- length(pit_ids)
+  if (is.null(npit)) {
+    npit <- length(pit_ids)
+  }
 
   ll <- lapply(1:npit, function(idx) {
     s <- pit_ids[[idx]]
-    print(sprintf("%04d %04d %s", idx, length(pit_ids), s))
+    print(sprintf("%04d %04d %s", idx, npit, s))
     tmp <- get_dra_runs(ev, mods, s)
-    tmp$pit_id <- s}
+    tmp$pit_id <- s
+    tmp
+    }
   )
   dra_runs <- purrr::reduce(ll, rbind.data.frame)
 
   print('getting summaries...')
   model_names <- names(mods)
 
-  npit <- length(pit_ids)
   ll <- lapply(1:npit, function(pit_id_idx) {
     pit_id <- pit_ids[[pit_id_idx]]
     print(sprintf("%04d %04d %s", pit_id_idx, npit, pit_id))
