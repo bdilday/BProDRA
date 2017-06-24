@@ -3,10 +3,15 @@
 #' @import lme4
 #' @import magrittr
 #' @export
-fit_dra_value_model <- function(.data, metric, nagc=0) {
+fit_dra_value_model <- function(.data, metric, nagc=0, generic=FALSE) {
   mod_df <- get_dra_model_data(.data, metric)
-  frm <- get_dra_model_frm(metric)
-  glmer_mod <- glmer(frm, data=mod_df,
+  if (generic) {
+    frm <- get_dra_model_frm("GENERIC")
+  } else {
+    frm <- get_dra_model_frm(metric)
+  }
+
+  glmer_mod <- lme4::glmer(frm, data=mod_df,
                      nAGQ = nagc,
                      family = binomial,
                      control=glmerControl(optimizer = "nloptwrap")
@@ -123,6 +128,15 @@ get_dra_model_data <- function(.data, metric="HR") {
   } else if (metric == "DP") {
     tmp$outcome = ifelse( (tmp$EVENT_CD == 2) & (tmp$EVENT_OUTS_CT >= 2), 1, 0)
 
+  } else if (metric == "BIP") {
+    tmp$outcome = ifelse( tmp$EVENT_CD %in% c(2, 20, 21, 22), 1, 0)
+
+  } else if (metric == "BB") {
+    tmp$outcome = ifelse( tmp$EVENT_CD %in% c(14, 15, 16), 1, 0)
+
+  } else if (metric == "GENERIC_HR"){
+    tmp$outcome = ifelse( (tmp$EVENT_CD == 23) & (tmp$EVENT_OUTS_CT >= 2), 1, 0)
+
   } else {
     stop(sprintf("unknown metric: %s", metric))
   }
@@ -138,6 +152,7 @@ get_dra_model_data <- function(.data, metric="HR") {
                            batter=BAT_ID,
                            catcher=POS2_FLD_ID,
                            stadium=HOME_TEAM_ID,
+                           defense=AWAY_TEAM_ID,
                            Pos_2=POS2_FLD_ID,
                            Pos_3=POS3_FLD_ID,
                            Pos_4=POS4_FLD_ID,
@@ -242,6 +257,9 @@ get_dra_model_frm <-function(metric) {
     outcome ~ (1|batter) + (1|pitcher) + (1|Pos_2) + (1|Pos_3) +
       (1|Pos_4) + (1|Pos_5) + (1|Pos_6) + (1|Pos_7) + (1|Pos_8) + (1|Pos_9) +
       (1|stadium) + bats + throws
+
+  } else if (grepl('GENERIC', metric)) {
+    outcome ~ (1|batter) + (1|pitcher) + (1|catcher) + (1|defense) + bats + throws
 
   } else {
     stop(sprintf("unknown metric: %s", metric))

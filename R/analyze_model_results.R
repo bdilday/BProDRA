@@ -1,5 +1,4 @@
 
-
 #' @importFrom magrittr %$%
 #' @import dplyr
 #' @import lme4
@@ -9,13 +8,18 @@ ranef_to_df <- function(glmer_mod, ranef_name) {
   dplyr::data_frame(var_id=rownames(rr), value=rr[,1])
 }
 
+
+
 #' @export
-export_dra_results <- function(year, npit=NULL) {
+export_dra_results <- function(year, npit=NULL, metrics=NULL) {
   print('loading events...')
   ev <- load_events_data(year)
   pit_ids <- unique(ev$PIT_ID)
   print('loading mods...')
-  mods <- load_fitted_dra_models(year)
+  if (is.null(metrics)) {
+    metrics <- get_all_metrics()
+  }
+  mods <- load_fitted_dra_models(year, metrics=metrics)
   print('getting pit ranef...')
   pit_ranef <- extract_pitcher_ranef(mods)
 
@@ -90,12 +94,17 @@ load_comparison_metrics <- function() {
 }
 
 #' @export
-load_fitted_dra_models <- function(year) {
+load_fitted_dra_models <- function(year, metrics=NULL) {
+  if (is.null(metrics)) {
+    metric <- get_all_metrics()
+  }
   ans <- list()
   fs <- Sys.glob(sprintf('%s/BProDRA/extdata/glmer*%d*rds', .libPaths()[[1]], year))
   for (f in fs) {
     metric <- stringr::str_replace(f, sprintf(".+glmer_mod_(.+)_%s.rds", year), "\\1")
-    ans[[metric]] <- readRDS(f)
+    if (metric %in% metrics) {
+      ans[[metric]] <- readRDS(f)
+    }
   }
   ans
 }
@@ -114,6 +123,20 @@ extract_pitcher_ranef <- function(mods) {
     )
 }
 
+#' @export
+extract_batter_ranef <- function(mods) {
+  mods <- mods[get_batter_metrics()]
+  purrr::reduce(
+    lapply(names(mods),
+           function(mod_key) {
+             tmp<-ranef_to_df(mods[[mod_key]], "batter");
+             tmp$model_name <- mod_key;
+             return(tmp)
+           }
+    ),
+    rbind.data.frame
+  )
+}
 
 #' @export
 pool_predictions <- function(event_data, mods, predict_type='response') {
@@ -170,6 +193,25 @@ logit_fun <- function(x) {
 }
 
 #' @export
+get_delta_probs_batter <- function(event_data, mods, bat_id, batter_ranef_df=NULL) {
+  if(is.null(batter_ranef_df)){
+    batter_ranef_df <- extract_batter_ranef(mods)
+  }
+
+  cc = which(event_data$BAT_ID == bat_id)
+  pp <- pool_predictions(event_data[cc,], mods, predict_type = 'link')
+  zz <- batter_ranef_df %>% subset(var_id==bat_id)
+
+  w = pp
+  w0 = t(t(pp) - zz$value)
+
+  p = logit_fun(w)
+  p0 = logit_fun(w0)
+  p - p0
+
+}
+
+#' @export
 get_delta_probs <- function(event_data, mods, pit_id, pitcher_ranef_df=NULL) {
   if(is.null(pitcher_ranef_df)){
     pitcher_ranef_df <- extract_pitcher_ranef(mods)
@@ -185,6 +227,19 @@ get_delta_probs <- function(event_data, mods, pit_id, pitcher_ranef_df=NULL) {
   p = logit_fun(w)
   p0 = logit_fun(w0)
   p - p0
+
+}
+
+#' @export
+get_dra_batter_runs <- function(event_data, mods, bat_id, batter_ranef_df=NULL, delta_probs=NULL) {
+  if (is.null(delta_probs)) {
+    delta_probs <- get_delta_probs_batter(event_data, mods, bat_id, batter_ranef_df)
+  }
+
+  lw <- get_linear_weights()
+  tt = colSums(delta_probs) * c(data.matrix(lw[,names(mods)]))
+
+  data_frame(event_type=names(mods), dra_runs=tt)
 
 }
 
@@ -213,3 +268,7 @@ dra_components_boxplot <- function(.data) {
 
   }
 
+#' @export
+compute_dwoba <- function(event_data, mods) {
+
+}
