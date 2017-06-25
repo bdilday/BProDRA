@@ -9,6 +9,23 @@ ranef_to_df <- function(glmer_mod, ranef_name) {
 }
 
 
+#' @export
+get_all_batter_runs <- function(event_data, mods) {
+  batter_ranef <- extract_batter_ranef(mods)
+  bat_ids <- unique(ev$BAT_ID)
+
+  nbat <- length(bat_ids)
+  ll <- lapply(1:nbat, function(idx) {
+    s <- bat_ids[[idx]]
+    print(sprintf("%04d %04d %s", idx, nbat, s))
+    tmp <- get_dra_batter_runs(ev, mods, s, batter_ranef_df = batter_ranef)
+    tmp$bat_id <- s
+    tmp
+  }
+  )
+  dra_runs <- purrr::reduce(ll, rbind.data.frame)
+
+  }
 
 #' @export
 export_dra_results <- function(year, npit=NULL, metrics=NULL) {
@@ -30,7 +47,7 @@ export_dra_results <- function(year, npit=NULL, metrics=NULL) {
   ll <- lapply(1:npit, function(idx) {
     s <- pit_ids[[idx]]
     print(sprintf("%04d %04d %s", idx, npit, s))
-    tmp <- get_dra_runs(ev, mods, s)
+    tmp <- get_dra_runs(ev, mods, s, pitcher_ranef_df = pit_ranef)
     tmp$pit_id <- s
     tmp
     }
@@ -94,12 +111,17 @@ load_comparison_metrics <- function() {
 }
 
 #' @export
-load_fitted_dra_models <- function(year, metrics=NULL) {
+load_fitted_dra_models <- function(year, metrics=NULL, file_path=NULL) {
   if (is.null(metrics)) {
-    metric <- get_all_metrics()
+    metrics <- get_all_metrics()
   }
   ans <- list()
-  fs <- Sys.glob(sprintf('%s/BProDRA/extdata/glmer*%d*rds', .libPaths()[[1]], year))
+  if (is.null(file_path)) {
+    fs <- Sys.glob(sprintf('%s/BProDRA/extdata/glmer*%d*rds', .libPaths()[[1]], year))
+  } else {
+    fs <- Sys.glob(sprintf('%s/glmer*%d*rds', file_path, year))
+  }
+
   for (f in fs) {
     metric <- stringr::str_replace(f, sprintf(".+glmer_mod_(.+)_%s.rds", year), "\\1")
     if (metric %in% metrics) {
@@ -269,6 +291,73 @@ dra_components_boxplot <- function(.data) {
   }
 
 #' @export
-compute_dwoba <- function(event_data, mods) {
+log_likelihood <- function(mod, ranef_name, ranef_key, offset=0) {
+  tmp <- mod@frame
+  cc <- tmp[[ranef_name]] == ranef_key
+  tmp <- tmp[cc,]
+  pp <- logit_fun(predict(mod, newdata=tmp) + offset)
+  sum(tmp$outcome * log(pp) + (1-tmp$outcome) * log(1-pp))
+}
 
+#' @export
+ranef_uncertainity <- function(mod, ranef_name, ranef_key) {
+  rr <- ranef_to_df(mod, ranef_name)
+  ranef_baseline_value <- rr[rr$var_id == ranef_key,]$value
+  idx <- which(names(mod@cnms) == ranef_name)
+  ranef_sigma <- mod@theta[[idx]]
+  ranef_sigma_inv_half = 0.5/ranef_sigma^2
+  baseline_value <- log_likelihood(mod, ranef_name, ranef_key, offset=0) +
+    - ranef_baseline_value^2 * ranef_sigma_inv_half
+
+  dx <- seq(-1, 1, 0.05)
+  dy <- sapply(dx, function(x){
+    log_likelihood(mod, ranef_name, ranef_key, offset=x) -
+      (x - ranef_baseline_value)^2 * ranef_sigma_inv_half})
+
+  list(dx=dx, dy=dy, baseline_value=baseline_value)
+}
+
+#' @export
+lw_uncertainity <-function (mods) {
+  metrics <- names(mods)
+
+}
+
+#' @export
+run_value_uncertainty <- function(mods, metric, ranef_name, ranef_key) {
+  lw <- get_linear_weights()
+  ds <- ranef_uncertainity_parabolic_approx(mods[[metric]], ranef_name, ranef_key)
+  mod <- mods[[metric]]
+  tmp <- mod@frame
+  # TODO: handle case where selection is empty
+  cc <- tmp[[ranef_name]] == ranef_key
+  tmp <- tmp[cc,]
+  eta0 <- predict(mod, newdata=tmp, type='link')
+  etaP <- eta0 + ds
+  etaM <- eta0 - ds
+  dP <- 0.5 * (logit_fun(etaP) + logit_fun(etaM) - 2 * logit_fun(eta0))
+  sum(dP * lw[[metric]])
+  }
+
+#' @export
+ranef_uncertainity_parabolic_approx <- function(mod, ranef_name, ranef_key) {
+  rr <- ranef_to_df(mod, ranef_name)
+  ranef_baseline_value <- rr[rr$var_id == ranef_key,]$value
+  idx <- which(names(mod@cnms) == ranef_name)
+  ranef_sigma <- mod@theta[[idx]]
+
+  ds2 <- -2 * second_derivative(mod, ranef_name, ranef_key) + 2 / ranef_sigma^2
+  if (ds2 <= 0) {
+    stop('second derivative is not positive.')
+  }
+  1 / sqrt(ds2)
+}
+
+#' @export
+second_derivative <- function(mod, ranef_name, ranef_key) {
+  h <- 1e-6
+  f0 <- log_likelihood(mod, ranef_name, ranef_key)
+  f1p <- log_likelihood(mod, ranef_name, ranef_key, offset=h)
+  f1m <- log_likelihood(mod, ranef_name, ranef_key, offset=-h)
+  (f1m + f1p - 2*f0) / h^2
 }
