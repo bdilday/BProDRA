@@ -14,4 +14,8 @@ Imports: dplyr,
     readr,
     magrittr,
     purrr,
-    RMySQL
+    RMySQL,
+    Lahman
+Suggests: knitr,
+    rmarkdown
+VignetteBuilder: knitr

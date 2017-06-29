@@ -6,16 +6,18 @@
 fit_dra_value_model <- function(.data, metric, nagc=0, generic=FALSE) {
   mod_df <- get_dra_model_data(.data, metric)
   if (generic) {
+    cc <- mod_df$pitcher_hitting
+    mod_df[cc,]$batter<- 'pitashittr'
     frm <- get_dra_model_frm("GENERIC")
   } else {
     frm <- get_dra_model_frm(metric)
-  }
 
-  glmer_mod <- lme4::glmer(frm, data=mod_df,
-                     nAGQ = nagc,
-                     family = binomial,
-                     control=glmerControl(optimizer = "nloptwrap")
-                     )
+    glmer_mod <- lme4::glmer(frm, data=mod_df,
+                             nAGQ = nagc,
+                             family = binomial,
+                             control=glmerControl(optimizer = "nloptwrap")
+    )
+  }
 }
 
 
@@ -128,6 +130,12 @@ get_dra_model_data <- function(.data, metric="HR") {
   } else if (metric == "DP") {
     tmp$outcome = ifelse( (tmp$EVENT_CD == 2) & (tmp$EVENT_OUTS_CT >= 2), 1, 0)
 
+  } else if (metric == "BIP_OUT") {
+    tmp$outcome = ifelse( tmp$EVENT_CD %in% c(2), 1, 0)
+
+  } else if (metric == "BIP_HIT") {
+    tmp$outcome = ifelse( tmp$EVENT_CD %in% c(20, 21, 22), 1, 0)
+
   } else if (metric == "BIP") {
     tmp$outcome = ifelse( tmp$EVENT_CD %in% c(2, 20, 21, 22), 1, 0)
 
@@ -141,7 +149,8 @@ get_dra_model_data <- function(.data, metric="HR") {
     stop(sprintf("unknown metric: %s", metric))
   }
 
-  tmp <- tmp %>% transmute(GAME_ID=GAME_ID,
+  tmp <- tmp %>% transmute(season=season,
+                           GAME_ID=GAME_ID,
                            EVENT_ID=EVENT_ID,
                            EVENT_CD=EVENT_CD,
                            outcome=outcome,
@@ -152,6 +161,7 @@ get_dra_model_data <- function(.data, metric="HR") {
                            batter=BAT_ID,
                            catcher=POS2_FLD_ID,
                            stadium=HOME_TEAM_ID,
+                           stadium_hand=paste(stadium, BAT_HAND_CD, sep=''),
                            defense=AWAY_TEAM_ID,
                            Pos_2=POS2_FLD_ID,
                            Pos_3=POS3_FLD_ID,
@@ -176,8 +186,20 @@ get_dra_model_data <- function(.data, metric="HR") {
                            base_outs = as.factor(base_outs),
                            fld_team = ifelse(BAT_HOME_ID==1, AWAY_TEAM_ID, HOME_TEAM_ID),
                            TTO=TTO,
+                           platoon_advantage=ifelse(BAT_HAND_CD==PIT_HAND_CD, 'XX', 'XO'),
                            assist=as.factor(ASS1_FLD_CD)
   )
+
+  master_simple <- Lahman::Master %>% select(retroID, birthYear)
+  tmp %<>% merge(master_simple, by.x='pitcher', by.y='retroID', all.x=TRUE)
+  tmp %<>% mutate(pitcher_age=season-birthYear) %>% select(-birthYear)
+
+  tmp %<>% merge(master_simple, by.x='batter', by.y='retroID', all.x=TRUE)
+  tmp %<>% mutate(batter_age=season-birthYear) %>% select(-birthYear)
+
+  tmp %<>% merge(master_simple, by.x='catcher', by.y='retroID', all.x=TRUE)
+  tmp %<>% mutate(catcher_age=season-birthYear) %>% select(-birthYear)
+  tmp
 }
 
 
@@ -259,7 +281,8 @@ get_dra_model_frm <-function(metric) {
       (1|stadium) + bats + throws
 
   } else if (grepl('GENERIC', metric)) {
-    outcome ~ (1|batter) + (1|pitcher) + (1|catcher) + (1|defense) + bats + throws
+    outcome ~ (1|batter) + (1|pitcher) + (1|catcher) + (1|stadium) +
+      platoon_advantage + TTO
 
   } else {
     stop(sprintf("unknown metric: %s", metric))

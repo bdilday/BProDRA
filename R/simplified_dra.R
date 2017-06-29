@@ -20,6 +20,7 @@ loop_export_dra_model_simplified <- function(year, metrics=NULL, nagc=0) {
   }
 }
 
+#' @export
 get_simplified_metrics <- function() {
-  c("HR", "BB", "SO", "BIP")
+  c("HR", "BB", "SO", "BIP_OUT", "BIP_HIT")
 }

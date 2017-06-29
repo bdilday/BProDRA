@@ -33,7 +33,9 @@ export_events_data <- function(year_id, .data=NULL) {
 load_events_data <- function(year_id) {
   df_name <- sprintf("dra_events_%d", year_id)
   ofile <- sprintf("%s/BProDRA/extdata/%s.rds", .libPaths()[[1]], df_name)
-  readRDS(ofile)
+  tmp <- readRDS(ofile)
+  tmp$season <- as.integer(stringr::str_replace(tmp[1,]$GAME_ID, '^[A-Z]{3}([0-9]{4}).+', '\\1'))
+  tmp
 
 }
 

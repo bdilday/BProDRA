@@ -1,0 +1,65 @@
+---
+title: "Confidence interavls for DRA"
+author: "Ben Dilday"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Introduction
+
+This vignette discusses extimating the variance of the random effects of a multi effect generalized linear model. The method use `rstan`to implement a multinomial model, as oppsoed to a set of binomial models. 
+
+# Parabolic approximation
+
+A way to get an estimate of the uncertainty on the parameters of a model is to use the parabolic approximation. That is, assume that in the neighborhood of the global minimum, the log-likelihood, $l$, can be a approximated with a Taylor expansion as 
+
+$$ l(\Omega + \delta \Omega) \approx l(\Omega) + \nabla_{\Omega} l \cdot \delta \Omega + \delta \Omega^{T} H \delta \Omega$$
+
+where $H$ is the Hessian with elements $H_{i,j} = \frac{\partial^2 l}{\partial \Omega_{i} \partial \Omega_{j}}$. The estimate of the covariance matrix of the parameters can be seen to be the inverse of the Hessian. This is complex to implement for DRA because of the large number of parameters.  
+
+# Markov chain Monte Carlo
+
+An alternative approach is to use Markov chain Monte Carlo to estimate the posterier probability distribution. This analysis uses the `R` verion of `stan` (`rstan`) to do the sampling. `rstan` is efficient because the models are compiled to `C++`, and because it uses a sophisticated sampling algorithm. 
+
+## The multinomial model
+
+### Data
+
+For this analysis I use a simplified vesion of DRA. It has five mutually exclusive event outcomes, instead of the 24 of DRA. It also uses a reduced set of predictors that are consistent across outcomes.
+
+The event outcomes are:
+
+* Home run
+
+* Strikeout
+
+* Base on balls (including intentional and hit-by-pitch)
+
+* Ball-in-play for an out
+
+* Ball-in-play for a hit
+
+The predictors are:
+
+* batter
+
+* pitcher
+
+* stadium
+
+### The model
+
+As mentioned above, the model is a multinomial model, not a set of binomial models as used in DRA. Fitting models in `stan` is a complicated topic and going into the details here would take us too far a field. I refer you to the documentation <http://mc-stan.org/users/documentation/>. In particular, fitting a multinomial model is discussed in chapter 8 of the manual. Additio5nally the code to defi4ne and fit the model dscussed here is available in the `BProDRA` `R` package in github.
+
+An important aspect of this analysis is that I fit a set of binomial models using `lme4::glmer` before applying MCMC. This gives me good starting values and also an estimate of the standard deviation oof the population for each random effect. In practice, when I apply MCMC I fix the standard deviation of the prior distributions. This drastically reduces computation time.
+
+
+
+
+
+
+

@@ -1,0 +1,70 @@
+---
+title: "Multi-year park effects and aging with mixed effect models"
+author: "Ben Dilday"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# The basics
+
+For this analysis, I will use the simplified form of DRA I developed, and discussed in the "A simplified DRA" vignette. The curx is that I model 5 mutually exclusive outcomes in stead of the 24 of DRA, and use a consistent set of predictors for each model.
+
+* outcomes
+    * HR
+    * SO
+    * BB
+    * BIP - out
+    * BIP - hit
+* predictors
+    * pitcher
+    * batter
+    * catcher
+    * stadium
+    * platoon advantage
+    * time-through-the-order
+    
+# A time-dependent model
+
+The purpose of this analysis is to experiment with using mixed-effect models to constrain aging curves. The idea is to set up a model that tracks a players talent over multiple years, and model the age dependence as a quadratice function of (age-27 years old). That is, the model will have the form,
+
+``` {r}
+frm <- outcome ~ (1|batter) + (1|pitcher) + (1|catcher) + (1|stadium) + 
+  platoon_advantage + TTO + 
+  I(pitcher_age-27) + I((pitcher_age-27)^2) + 
+  I(batter_age-27) + I((batter_age-27)^2) + 
+  I(catcher_age-27) + I((catcher_age-27)^2) + season
+```
+
+The "27" here is arbitrary, but is convenient for interpretaion.
+
+I have previoulsy stored the data for the years 2010-2016,  and here I load them,
+
+``` {r}
+seasons <- 2010:2016
+ev <- purrr::reduce(lapply(seasons, BProDRA::load_events_data), rbind.data.frame)
+nrow(ev)
+```
+
+
+``` {r}
+model_df <- BProDRA::get_dra_model_data(ev, metric='HR')
+head(model_df)
+```
+
+Make sure season is a factor
+``` {r}
+model_df$season <- as.factor(model_df$season)
+```
+
+Fit the model,
+
+``` {r}
+mod <- lme4::glmer(frm, data=model_df, nAGQ = 0, family = binomial, control=glmerControl(optimizer = "nloptwrap"))
+```
+
+
+

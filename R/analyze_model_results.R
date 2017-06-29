@@ -204,7 +204,9 @@ get_linear_weights <- function() {
        "RF_PO"=out_val,
        "Second_PO"=out_val,
        "Short_PO"=out_val,
-       "Third_PO"=out_val
+       "Third_PO"=out_val,
+       "BIP_OUT"=out_val,
+       "BIP_HIT"=0.15*lw$x1B + 0.045*lw$x2B + 0.005*lw$x3B
        )
 
 }

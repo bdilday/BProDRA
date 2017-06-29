@@ -1,0 +1,71 @@
+---
+title: "A simplified DRA"
+author: "Ben Dilday"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Baseball Prospectus' DRA
+
+The DRA model by Baseball Prospectus, [described in detail here] <http://www.baseballprospectus.com/article.php?articleid=29118>, uses 24 separate binomial models. In addition, the models use a mix of different random and fixed effects for each model. 
+
+## Simplified DRA
+
+For the sake of exposition I am going to define a simplified DRA model, that uses only 5 outcomes, and that uses the same set of predictors for each one. The five outcomes are,
+
+* Home run
+* Base-on-balls
+* Strikeout
+* Ball in play for an out
+* Ball in play for a hit
+
+The predictors are the following:
+
+### random effects
+* batter
+* pitcher
+* catcher
+* stadium
+
+### fixed effects
+
+* platoon advantage
+* times-through-the-order
+
+Additionally, instead of trying to infer the true talent for batting for each pitcher individually, I will force them to all be the same. This is an aternative to how DRA handles it, which is to have an "pitcher-as-hitter" offset, and measure the pitcher-as-hitter hitting ability relative to this. 
+
+As with the official DRA I will fit each model using a scheme where "failure" is all other outcomes. Below is a note on this parametrization.
+
+
+## Model results
+
+This work uses my `BProDRA` package, which can be installed from github.
+
+```{r, eval=FALSE} 
+devtools::install_github('bdilday/BProDRA')
+```
+
+I can load the package
+
+```{r}
+library(BProDRA)
+```
+
+I have previously fit the models, for the 2016 season and stored them locally using,
+
+``` {r, eval=FALSE}
+loop_export_dra_model_simplified(2016)
+```
+
+Now I can load them for analysis, 
+
+``` {r}
+ mods <- load_fitted_dra_models(2016, metrics = BProDRA:::get_simplified_metrics(), file_path = 'inst/extdata/smplfy2016')
+```
+
+
+
