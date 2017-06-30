@@ -1,5 +1,5 @@
 ---
-title: "Confidence interavls for DRA"
+title: "Confidence intervals for DRA"
 author: "Ben Dilday"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
@@ -11,7 +11,7 @@ vignette: >
 
 # Introduction
 
-This vignette discusses extimating the variance of the random effects of a multi effect generalized linear model. The method use `rstan`to implement a multinomial model, as oppsoed to a set of binomial models. 
+This vignette discusses estimating the variance of the random effects of a multi effect generalized linear model. The method use `rstan` to implement a multinomial model.
 
 # Parabolic approximation
 
@@ -23,13 +23,13 @@ where $H$ is the Hessian with elements $H_{i,j} = \frac{\partial^2 l}{\partial \
 
 # Markov chain Monte Carlo
 
-An alternative approach is to use Markov chain Monte Carlo to estimate the posterier probability distribution. This analysis uses the `R` verion of `stan` (`rstan`) to do the sampling. `rstan` is efficient because the models are compiled to `C++`, and because it uses a sophisticated sampling algorithm. 
+An alternative approach is to use Markov chain Monte Carlo to estimate the posterior probability distribution. This analysis uses the `R` version of `stan` (`rstan`) to do the sampling. `rstan` is efficient because the models are translated to `C++` and compiled, and because it uses a sophisticated sampling algorithm. 
 
 ## The multinomial model
 
 ### Data
 
-For this analysis I use a simplified vesion of DRA. It has five mutually exclusive event outcomes, instead of the 24 of DRA. It also uses a reduced set of predictors that are consistent across outcomes.
+For this analysis I use a simplified version of DRA. It has five mutually exclusive event outcomes, instead of the 24 of DRA. It also uses a reduced set of predictors that are consistent across outcomes.
 
 The event outcomes are:
 
@@ -53,13 +53,17 @@ The predictors are:
 
 ### The model
 
-As mentioned above, the model is a multinomial model, not a set of binomial models as used in DRA. Fitting models in `stan` is a complicated topic and going into the details here would take us too far a field. I refer you to the documentation <http://mc-stan.org/users/documentation/>. In particular, fitting a multinomial model is discussed in chapter 8 of the manual. Additio5nally the code to defi4ne and fit the model dscussed here is available in the `BProDRA` `R` package in github.
+As mentioned above, the model is a multinomial model, not a set of binomial models as used in DRA. Fitting models in `stan` is a complicated topic and going into the details here would take us too far a field. I refer you to the documentation <http://mc-stan.org/users/documentation/>. In particular, fitting a multinomial model is discussed in chapter 8 of the manual. Additionally the code to define and fit the model discussed here is available in the `BProDRA` `R` package in github.
 
-An important aspect of this analysis is that I fit a set of binomial models using `lme4::glmer` before applying MCMC. This gives me good starting values and also an estimate of the standard deviation oof the population for each random effect. In practice, when I apply MCMC I fix the standard deviation of the prior distributions. This drastically reduces computation time.
+An important aspect of this analysis is that I fit a set of binomial models using `lme4::glmer` before applying MCMC. This gives me good starting values and also an estimate of the standard deviation of the population for each random effect. In practice, when I apply MCMC I fix the standard deviation of the prior distributions. This drastically reduces computation time.
 
+Even with this simplified model the computation time is significant. In the model I am discussing currently I used 4 Markov chains, each of which sampled 500 points from the posterior, of which 200 were used for warmup. With a more basic sampling algorithm, 4 x 500 samples of the posterior probability distribution would not generally be sufficient. However, the sampling algorithm used in `stan` makes efficient choices of parameter updates, so those 4 x 500 are more informative than they would be from a more naive metropolis-Hastings MCMC update scheme. In any case, this model took three hours to run, so for this exploratory work the 4 x 500 will have to suffice.
 
+Here I read the stored model.
 
+``` {r}
+stan_mod <- readRDS('../outputs/stan_multinom_model_2016_all.rds')
 
-
+```
 
 
