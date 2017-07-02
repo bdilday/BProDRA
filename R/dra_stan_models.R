@@ -1,10 +1,5 @@
 
-library(BProDRA)
-library(rstan)
-library(dplyr)
-library(magrittr)
-library(lme4)
-
+#' @export
 generate_event_data <- function(nlim = NULL, rseed=102, year=2016) {
   ev <- load_events_data(year)
 
@@ -57,6 +52,7 @@ generate_event_data <- function(nlim = NULL, rseed=102, year=2016) {
   ev
 }
 
+#' @export
 generate_model_df <- function(event_data=NULL,
                               nlim = NULL, rseed=102, year=2016) {
   if (is.null(event_data)) {
@@ -82,6 +78,7 @@ generate_model_df <- function(event_data=NULL,
               ev=event_data)
 }
 
+#' @export
 initialize_with_lme4 <- function(model_df,
                                  frm=as.formula('outcome ~ (1|bid) + (1|pid) + (1|sid)')) {
 
@@ -105,6 +102,7 @@ initialize_with_lme4 <- function(model_df,
 
 }
 
+#' @export
 update_ans <- function(ans, mods) {
   nl <- length(names(mods))
 
@@ -129,6 +127,7 @@ update_ans <- function(ans, mods) {
   ans
 }
 
+#' @export
 get_init_fun <- function(ans, do_iden=FALSE) {
   rr <- ans$rr
   k <- ans$K
@@ -145,7 +144,8 @@ get_init_fun <- function(ans, do_iden=FALSE) {
 
 }
 
-do_fit <- function(ans, warmup=100, iter=500, seed=10101, do_iden=FALSE) {
+#' @export
+do_stan_fit <- function(ans, warmup=100, iter=500, seed=10101, do_iden=FALSE) {
   init_fun <- get_init_fun(ans, do_iden=do_iden)
   if (do_iden) {
     stan(file='inst/extdata/multinom_ravel_init_identify.stan',
@@ -170,8 +170,8 @@ do_fit <- function(ans, warmup=100, iter=500, seed=10101, do_iden=FALSE) {
   }
 }
 
-
-predict_from_stan <- function(stan_mod) {
+#' @export
+predict_from_stan_X <- function(stan_mod, ans) {
   ee <- rstan::extract(stan_mod)
 
   alpha_m <- purrr::reduce(lapply(1:5, function(i) {ee$ALPHA[,i,] %>% colMeans()}), cbind)
@@ -183,5 +183,72 @@ predict_from_stan <- function(stan_mod) {
 
   nl <- dim(pp_mu)[[1]]
   ll <- lapply(1:nl, function(i) {exp(pp_mu[i,]) / (sum(exp(pp_mu[i,1:5])))})
+  pp <- t(matrix(unlist(ll), nrow=5))
+  pp
+}
+
+
+#' @export
+runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
+  if (is.null(ee)) {
+    ee <- rstan::extract(stan_mod)
+  }
+
+  if (ranef_name == 'bid') {
+    ndf_cc <- which(ans$ev$BAT_ID == ranef_key)
+    id <- ans$ev[ndf_cc,]$bid[[1]]
+    offset <- ee$ALPHA[,,]
+  } else if (ranef_name == 'pid') {
+    ndf_cc <- which(ans$ev$PIT_ID == ranef_key)
+    id <- ans$ev[ndf_cc,]$pid[[1]]
+  } else if (ranef_name == 'sid') {
+    ndf_cc <- which(ans$ev$HOME_TEAM_ID == ranef_key)
+    id <- ans$ev[ndf_cc,]$sid[[1]]
+  } else {
+    stop('random effect ', ranef_name, ' not supported')
+  }
+
+
+  player_events <- ans$ev[ndf_cc,]
+  offset <- list()
+  for (i in 1:4) {
+    offset[[i]] <- ee$ALPHA[,i,id]
+  }
+
+  pp_baseline <- predict_from_stan(stan_mod, player_events, ee=ee, offset=offset)
+  pp_player <- predict_from_stan(stan_mod, player_events, ee=ee, offset=0)
+}
+
+
+#' @export
+runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.573, 1.376, -0.28, 0.336)) {
+  dd <- dim(prediction_array)
+  tmp <- array(rep(lw, each=dd[[1]] * dd[[2]]), dim=dd)
+
+}
+
+#' @export
+predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
+  if (is.null(ee)) {
+    ee <- rstan::extract(stan_mod)
+  }
+
+  etas_key_e <- list()
+  etas_avg_e <- list()
+
+  if (length(offset) == 1) {
+    offset <- rep(offset, 4)
+  }
+
+  denom <- 1
+  for (i in 1:4) {
+    etas_key_e[[i]] <-
+      exp(t(t(ee$ALPHA[,i,ev$bid] + ee$ALPHA[,i,ev$pid] + ee$ALPHA[,i,ev$sid] - offset[[i]]) + ee$C[,i]))
+    denom <- denom + etas_key_e[[i]]
+  }
+  etas_key_e[[5]] <- 1
+
+  ll <- lapply(1:5, function(i) {etas_key_e[[i]] / denom})
+  ppA <- array(pp2, dim=c(dim(ll[[1]]), length(ll)))
 
 }
