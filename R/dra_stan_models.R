@@ -121,53 +121,33 @@ update_ans <- function(ans, mods) {
     tmp <- matrix(t(rbind(ranef(mod)$bid,ranef(mod)$pid,ranef(mod)$sid)), nrow=1)
     rr[idx,] <- tmp
   }
-  cc <- rr < 1e-2
-  rr[cc] <- 0.1
   ans$rr <- rr
+  cc <- ans$RANEF_SIGMA < 1e-2
+  ans$RANEF_SIGMA[cc] <- 0.1
   ans
 }
 
 #' @export
-get_init_fun <- function(ans, do_iden=FALSE) {
+get_init_fun <- function(ans) {
   rr <- ans$rr
   k <- ans$K
 
-  if (do_iden) {
-    function(chain_id=NULL) {
+  function(chain_id=NULL) {
       list(ALPHAX=rr[1:(k-1),], CX=rep(-1, k-1))
-    }
-  } else {
-    function(chain_id=NULL) {
-      list(ALPHAX=rr, CX=rep(-1, k))
-    }
   }
-
 }
 
 #' @export
-do_stan_fit <- function(ans, warmup=100, iter=500, seed=10101, do_iden=FALSE) {
-  init_fun <- get_init_fun(ans, do_iden=do_iden)
-  if (do_iden) {
-    stan(file='inst/extdata/multinom_ravel_init_identify.stan',
+do_stan_fit <- function(model_df, warmup=100, iter=500, seed=10101) {
+  init_fun <- get_init_fun(model_df)
+    stan(file='inst/extdata/multinom_ravel.stan',
          model_name="multinom_iden",
-         data=ans,
+         data=model_df,
          iter=iter,
          warmup=warmup,
-         #         init="0",
          init=init_fun,
          seed=seed,
          cores=4, chains=4)
-  } else {
-    stan(file='inst/extdata/multinom_ravel_init.stan',
-         model_name="multinom_",
-         data=ans,
-         iter=iter,
-         warmup=warmup,
-         #init="0",
-         init=init_fun,
-         seed=seed,
-         cores=4, chains=4)
-  }
 }
 
 #' @export
@@ -217,6 +197,8 @@ runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
 
   pp_baseline <- predict_from_stan(stan_mod, player_events, ee=ee, offset=offset)
   pp_player <- predict_from_stan(stan_mod, player_events, ee=ee, offset=0)
+  runs_from_predictions(pp_player - pp_baseline)
+
 }
 
 
@@ -225,6 +207,7 @@ runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.573, 1.376, 
   dd <- dim(prediction_array)
   tmp <- array(rep(lw, each=dd[[1]] * dd[[2]]), dim=dd)
 
+  (tmp * prediction_array )  %>% apply(1, sum)
 }
 
 #' @export
@@ -234,7 +217,6 @@ predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
   }
 
   etas_key_e <- list()
-  etas_avg_e <- list()
 
   if (length(offset) == 1) {
     offset <- rep(offset, 4)
@@ -249,6 +231,6 @@ predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
   etas_key_e[[5]] <- 1
 
   ll <- lapply(1:5, function(i) {etas_key_e[[i]] / denom})
-  ppA <- array(pp2, dim=c(dim(ll[[1]]), length(ll)))
+  ppA <- array(unlist(ll), dim=c(dim(ll[[1]]), length(ll)))
 
 }

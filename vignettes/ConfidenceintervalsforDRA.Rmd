@@ -1,5 +1,5 @@
 ---
-title: "Confidence intervals for DRA"
+title: "Confidence intervals for deserved linear weights with MCMC"
 author: "Ben Dilday"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
@@ -9,21 +9,16 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-# Introduction
+``` {r, echo=FALSE, message=FALSE}
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(BProDRA)
+```
 
-This vignette discusses estimating the variance of the random effects of a multi effect generalized linear model. The method use `rstan` to implement a multinomial model.
+## Introduction
 
-# Parabolic approximation
-
-A way to get an estimate of the uncertainty on the parameters of a model is to use the parabolic approximation. That is, assume that in the neighborhood of the global minimum, the log-likelihood, $l$, can be a approximated with a Taylor expansion as 
-
-$$ l(\Omega + \delta \Omega) \approx l(\Omega) + \nabla_{\Omega} l \cdot \delta \Omega + \delta \Omega^{T} H \delta \Omega$$
-
-where $H$ is the Hessian with elements $H_{i,j} = \frac{\partial^2 l}{\partial \Omega_{i} \partial \Omega_{j}}$. The estimate of the covariance matrix of the parameters can be seen to be the inverse of the Hessian. This is complex to implement for DRA because of the large number of parameters.  
-
-# Markov chain Monte Carlo
-
-An alternative approach is to use Markov chain Monte Carlo to estimate the posterior probability distribution. This analysis uses the `R` version of `stan` (`rstan`) to do the sampling. `rstan` is efficient because the models are translated to `C++` and compiled, and because it uses a sophisticated sampling algorithm. 
+This vignette discusses estimating the variance of the random effects of a mixed-effect generalized linear model. The method use `rstan` to implement a multinomial model.
 
 ## The multinomial model
 
@@ -33,15 +28,16 @@ For this analysis I use a simplified version of DRA. It has five mutually exclus
 
 The event outcomes are:
 
+* Ball-in-play for an out
+
+* Ball-in-play for a hit
+
 * Home run
 
 * Strikeout
 
 * Base on balls (including intentional and hit-by-pitch)
 
-* Ball-in-play for an out
-
-* Ball-in-play for a hit
 
 The predictors are:
 
@@ -53,17 +49,395 @@ The predictors are:
 
 ### The model
 
-As mentioned above, the model is a multinomial model, not a set of binomial models as used in DRA. Fitting models in `stan` is a complicated topic and going into the details here would take us too far a field. I refer you to the documentation <http://mc-stan.org/users/documentation/>. In particular, fitting a multinomial model is discussed in chapter 8 of the manual. Additionally the code to define and fit the model discussed here is available in the `BProDRA` `R` package in github.
+Briefly, `stan` is a statistical modeling package that is focused on Bayesian inference and that has lots of capabilities. The full documentation is available at <http://mc-stan.org/users/documentation/>. Fitting a multinomial model with MCMC is discussed in chapter 8 of the manual. Additionally the code to define and fit the model discussed here is available in the `BProDRA` `R` package in github, and is shown in the Appendix below.
 
-An important aspect of this analysis is that I fit a set of binomial models using `lme4::glmer` before applying MCMC. This gives me good starting values and also an estimate of the standard deviation of the population for each random effect. In practice, when I apply MCMC I fix the standard deviation of the prior distributions. This drastically reduces computation time.
-
-Even with this simplified model the computation time is significant. In the model I am discussing currently I used 4 Markov chains, each of which sampled 500 points from the posterior, of which 200 were used for warmup. With a more basic sampling algorithm, 4 x 500 samples of the posterior probability distribution would not generally be sufficient. However, the sampling algorithm used in `stan` makes efficient choices of parameter updates, so those 4 x 500 are more informative than they would be from a more naive metropolis-Hastings MCMC update scheme. In any case, this model took three hours to run, so for this exploratory work the 4 x 500 will have to suffice.
-
-Here I read the stored model.
 
 ``` {r}
-stan_mod <- readRDS('../outputs/stan_multinom_model_2016_all.rds')
+ev_data <- BProDRA::generate_event_data(year=2016)
+head(ev_data, 1)
+```
+
+I have removed pitchers-as-hitters from the sample. Pitchers-as-hitters really aren't informative in figuring out the true talent linear weights for pitching, and it can be assumed that the variance of pitchers-as-hitters doesn't reflect the variance of batters-as-hitter. So it's both convenient and makes for a more reasonable model to just exclude them.
+
+I also replace any batter or pitcher with less than 20 total PA with a generic stand-in.
+
+``` {r}
+ev_data %>% count(BAT_ID, sort=TRUE)
+```
+
+The `xxxxb001` value in the `BAT_ID` field represents those low-PA players, and there's a similar entry for pitchers.
+
+``` {r, echo=FALSE, message=FALSE}
+mods <- readRDS('../outputs/lme_mods_init2016.rds')
 
 ```
 
+I have a helper function to prepare the data for fitting with `stan`
 
+``` {r}
+model_df <- BProDRA::generate_model_df(event_data = ev_data)
+model_df %>% names
+# number of data points
+model_df$N
+# number of predictors
+model_df$D
+# number of mutually exclusive outcomes
+model_df$K
+# number of levels per predictor
+model_df$LEVELS
+# outcomes
+table(model_df$y)
+```
+
+Before fitting the multinomial model with MCMC, I fit a set of binomial models using `lme4::glmer`. This gives me good starting values, and an estimate of the standard deviation of the population for each random effect. In practice, when I apply MCMC I fix the standard deviation of the prior distributions, which drastically reduces computation time.
+
+``` {r, eval=FALSE}
+initialize_with_lme4 <- function(model_df,
+                                 frm=as.formula('outcome ~ (1|bid) + (1|pid) + (1|sid)')) {
+
+  mods <- list()
+  unique_outcomes <- unique(model_df$outcome) %>% sort()
+  for (u in unique_outcomes) {
+    cat(sprintf('fitting model for outcome: %d \n', u))
+    cc <- which(model_df$outcome == u)
+    stopifnot(length(cc) > 0)
+    tmp <- model_df
+    tmp[cc,]$outcome <- 1
+    tmp[-cc,]$outcome <- 0
+    glmer_mod <- glmer(frm, data=tmp,
+                       nAGQ = 0,
+                       family = binomial,
+                       control=glmerControl(optimizer = "nloptwrap")
+    )
+    mods[[as.character(u)]] <- glmer_mod
+  }
+  mods
+}
+
+mods <- initialize_with_lme4(model_df)
+```
+
+``` {r, message=FALSE, echo=FALSE}
+mods <- readRDS('../outputs/lme_mods_init2016.rds')
+```
+
+In my encoding, the outcomes are given the following integer codes,
+
+* Ball in play for out => 1
+
+* Ball in play for hit => 2
+
+* Home run => 3
+
+* Strikeout => 4
+
+* Base on balls => 5
+
+The standard deviations of the predictors for the 5 outcomes are,
+
+``` {r}
+theta_df <- lapply(1:5, function(i) {
+  mods[[i]]@theta}
+  ) %>% unlist %>% 
+  array(dim=c(3, 5)) %>% t %>% as.data.frame()
+
+names(theta_df) <- c("pitcher", "batter", "stadium")
+print(theta_df)
+```
+
+Given the fitted `glmer` models, I update the `model_df` data structure to include the standard deviations of the random effects, and set the initial values of the MCMC parameters,
+
+``` {r}
+model_df <- BProDRA::update_ans(model_df, mods)
+names(model_df)
+model_df$RANEF_SIGMA
+```
+
+The initial values are stored in the `rr` member of the `model_df` list. Here are a few examples,
+
+``` {r}
+trout_idx <- model_df$ev %>% filter(grepl('^trou', BAT_ID)) %$% bid %>% '['(1)
+model_df$rr[,trout_idx]
+
+kershaw_idx <- model_df$ev %>% filter(grepl('^kers', PIT_ID)) %$% pid %>% '['(1)
+model_df$rr[,kershaw_idx]
+```
+
+The call to execute the `stan` model looks something like 
+
+``` {r, eval=FALSE}
+warmup <- 200
+iter <- 500
+seed <- 101
+stan_mod <- stan(file='inst/extdata/multinom_ravel.stan',
+         model_name="multinom_iden",
+         data=model_df,
+         iter=iter,
+         warmup=warmup,
+         init=init_fun,
+         seed=seed,
+         cores=4, chains=4)
+```
+
+where `iter_fun` is a function that returns the initial values of the parameters as a named list. For the model as I've described above, running this took about 3 hours for me. 
+
+
+``` {r, echo=FALSE, message=FALSE}
+stan_mod <- readRDS('../outputs/stan_multinom_model_2016_all.rds')
+```
+
+When it's finished, you have 1200 (= 4 chains x (500 iterations - 200 warmups)) draws from the posterior probability distribution for the random effects parameters. The values can be accessed using `rstan::extract`.
+
+``` {r}
+ee <- rstan::extract(stan_mod)
+names(ee)
+dim(ee$ALPHA)
+dim(ee$C)
+```
+
+To compute the probabilities for each outcome and each PA, we extract the parameter values, add them up and apply the inverse logit,
+
+``` {r}
+predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
+  if (is.null(ee)) {
+    ee <- rstan::extract(stan_mod)
+  }
+
+  etas_key_e <- list()
+
+  if (length(offset) == 1) {
+    offset <- rep(offset, 4)
+  }
+
+  denom <- 1
+  for (i in 1:4) {
+    etas_key_e[[i]] <-
+      exp(t(t(ee$ALPHA[,i,ev$bid] + 
+                ee$ALPHA[,i,ev$pid] + 
+                ee$ALPHA[,i,ev$sid] - 
+                offset[[i]]) + ee$C[,i]))
+    denom <- denom + etas_key_e[[i]]
+  }
+  etas_key_e[[5]] <- 1
+
+  ll <- lapply(1:5, function(i) {etas_key_e[[i]] / denom})
+  ppA <- array(unlist(ll), dim=c(dim(ll[[1]]), length(ll)))
+}
+```
+
+Then the linear weights value for a particular player is computed by taking the difference between the probabilities when that player is involved versus when an average player (which has parameter value 0 by definition) is involved, and multiplying that difference in probability by the linear weights value of the event. This is summed over outcomes for each PA, and finally summed over all PA to get the seasonal total deserved linear weights runs.
+
+``` {r}
+runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
+  if (is.null(ee)) {
+    ee <- rstan::extract(stan_mod)
+  }
+
+  if (ranef_name == 'bid') {
+    ndf_cc <- which(ans$ev$BAT_ID == ranef_key)
+    id <- ans$ev[ndf_cc,]$bid[[1]]
+  } else if (ranef_name == 'pid') {
+    ndf_cc <- which(ans$ev$PIT_ID == ranef_key)
+    id <- ans$ev[ndf_cc,]$pid[[1]]
+  } else if (ranef_name == 'sid') {
+    ndf_cc <- which(ans$ev$HOME_TEAM_ID == ranef_key)
+    id <- ans$ev[ndf_cc,]$sid[[1]]
+  } else {
+    stop('random effect ', ranef_name, ' not supported')
+  }
+
+
+  player_events <- ans$ev[ndf_cc,]
+  offset <- list()
+  for (i in 1:4) {
+    offset[[i]] <- ee$ALPHA[,i,id]
+  }
+
+  pp_baseline <- predict_from_stan(stan_mod, player_events, ee=ee, offset=offset)
+  pp_player <- predict_from_stan(stan_mod, player_events, ee=ee, offset=0)
+  runs_from_predictions(pp_player - pp_baseline)
+
+}
+
+runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.573, 1.376, -0.28, 0.336)) {
+  dd <- dim(prediction_array)
+  tmp <- array(rep(lw, each=dd[[1]] * dd[[2]]), dim=dd)
+
+  (tmp * prediction_array )  %>% apply(1, sum)
+}
+
+```
+
+The `0.573` linear weight value for balls-in-play for a hit is the average linear weight of singles, doubles, and triples, weighted by their league-wide frequency. In the next iteration of this model I'm planning to split those up in to singles and extra-base hits.
+
+The `runs_from_stan` function returns a vector consisting of the derived linear weights values attributed to a particular player for each draw from the posterior probability distribution of the multinomial model. As an illustration, here is what the function returns for Mike Trout,
+
+``` {r, fig.width=6, fig.height=6}
+lw_runs <- runs_from_stan(model_df, stan_mod, 'bid', 'troum001', ee=ee)
+length(lw_runs)
+mean(lw_runs)
+sd(lw_runs)
+df1 <- data_frame(lw_runs=lw_runs, player_name='Mike Trout')
+gg <- df1 %>% 
+  mutate(m=mean(lw_runs)) %>% 
+  ggplot(aes(x=lw_runs)) + 
+  geom_histogram(aes(y=..count../sum(..count..)), bins=40, color='#332222', fill='steelblue') + 
+  theme_minimal() +
+  theme(axis.title = element_text(size=16, face='bold'), axis.text = element_text(size=12)) +
+  labs(x='linear weights runs', y='probability', title='deserved lw runs: Mike Trout 2016') +
+  geom_vline(aes(xintercept=m))
+print(gg)
+
+```
+
+Some additional examples, 
+
+``` {r}
+generate_plot <- function(players, ranef_key) {
+  df1 <- data_frame()
+  for (player in names(players)) {
+    player_name <- players[[player]]
+    lw_runs <- runs_from_stan(model_df, stan_mod, ranef_key, player, ee=ee)
+    tmp <- data_frame(lw_runs=lw_runs, player_name=player_name)
+    df1 <- rbind(df1, tmp)
+  }
+  
+gg <- df1 %>% 
+  mutate(ilw_runs=round(lw_runs)) %>% 
+  group_by(player_name, ilw_runs) %>% 
+  summarise(n=n()) %>% ungroup() %>% 
+  group_by(player_name) %>% 
+  mutate(frac=n/sum(n), m=sum(ilw_runs * n)/sum(n)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=ilw_runs, y=n, group=player_name)) + 
+  geom_bar(stat='identity', width=1, fill='steelblue') + 
+  theme_minimal() +
+  theme(axis.title = element_text(size=16, face='bold'), axis.text = element_text(size=12)) +
+  labs(x='linear weights runs', y='probability', title='deserved lw runs: 2016') +
+  facet_wrap(~player_name, ncol=2) + 
+  geom_vline(aes(xintercept=m))  
+}
+```
+
+``` {r, fig.width=6, fig.height=6}
+players <- list('judga001'='Aaron Judge', 'sancg002'='Gary Sanchez', 'altuj001'='Jose Altuve', 'bryak001'='Kris Bryant')
+gg1 <- generate_plot(players, 'bid')
+print(gg1)
+```
+
+``` {r, fig.width=6, fig.height=6}
+players <- list('kersc001'='Clayton Kershaw', 'britz001'='Zach Britton', 'schem001'='Max Scherzer', 'porcr001'='Rick Porcello')
+gg1 <- generate_plot(players, 'pid')
+print(gg1)
+```
+
+``` {r, fig.width=6, fig.height=6}
+players <- list('NYA'='Yankee Stadium', 'LAN'='Dodger Stadium', 'WAS'='Nationals Park', 'SDN'='Petco Park')
+gg1 <- generate_plot(players, 'sid')
+print(gg1)
+```
+
+## Appendix 
+
+### The multinomial model in `stan`
+
+In the `stan` multinomial model, the data block is defined as
+
+```
+data {
+  int<lower=2> K; # classes
+  int<lower=0> N; # data points
+  int<lower=1> D; # number of predictors / random effects
+  real<lower=0> RANEF_SIGMA[K, D]; # sd of random effects
+  int<lower=0> LEVELS[D]; # number of levels of each predictor
+  int<lower=0> SUM_LEVELS;
+  int<lower=0> MAX_LEVEL;
+  int<lower=1, upper=K> y[N];
+  int<lower=1, upper=MAX_LEVEL> x[N, D];
+}
+```
+
+The standard deviations from the `glmer` models are passed in in the array `RANEF_SIGMA`. The data matrix, `X`, consists of a value for each of the `D` predictors, which are all factors in this particular model and so are input as integer indexes.
+
+In the `transformed data` block, the array `LEVELS` is unpacked to set the integer-index limits of each of the `D` predictors,
+
+```
+transformed data {
+  int CU_LEVELS[2, D];
+  CU_LEVELS[1, 1] = 1;
+  CU_LEVELS[2, 1] = LEVELS[1];
+  for (d in 2:D) {
+    CU_LEVELS[1, d] = CU_LEVELS[1, d-1] + LEVELS[d-1];
+    CU_LEVELS[2, d] = CU_LEVELS[2, d-1] + LEVELS[d];
+  }
+}
+```
+
+`CU_LEVELS` will be used in the model to apply the appropriate standard deviation of the prior distribution.
+
+The parameters are defined as,
+
+```
+parameters {
+  real ALPHAX[K-1, SUM_LEVELS];
+  real CX[K-1];
+}
+```
+
+There are `K-1` outcomes because I fix the parameter value for the last outcome to zero. This technique assures that the probabilities for the five mutually exclusive outcomes sums to one. This is applied in the `transformed parameters` block.
+
+```
+transformed parameters {
+  real C[K];
+  real ALPHA[K, SUM_LEVELS];
+
+  for (k in 1:(K-1)) {
+    C[k] = CX[k];
+  }
+    C[K] = 0.0;
+
+  for (i in 1:SUM_LEVELS) {
+   for (k in 1:(K-1)) {
+       ALPHA[k, i] = ALPHAX[k, i];
+     }
+     ALPHA[K, i] = 0.0;
+   }
+}
+```
+
+The random effects have been unraveled into a 1-d array with length `SUM_LEVELS`. Then when applying the model, the lookup table `CU_LEVELS` is used to map integer index back to predictor type, and apply the appropriate standard deviation to the prior distribution.
+
+```
+model {
+  vector[K] lambda[N]; // K outcomes for N data points
+
+  for (k in 1:K) {
+    C[k] ~ normal(0, 10); // loose prior on the model intercepts
+  }
+
+  for (i in 1:SUM_LEVELS) {
+    for (k in 1:K) {
+      for (d in 1:D) {
+      // check which predictor this level is, and apply the appropriate prior
+        if (i >= CU_LEVELS[1,d] && i <= CU_LEVELS[2,d]) {
+            ALPHA[k, i] ~ normal(0, RANEF_SIGMA[k, d]);
+          }
+      }
+    }
+  }
+
+   for (n in 1:N) {
+     for (k in 1:K) {
+       lambda[n][k] = C[k];
+       for (d in 1:D) {
+         lambda[n][k] = lambda[n][k] + ALPHA[k, x[n][d]  ];
+       }
+     }
+    }
+
+ for (n in 1:N) {
+  y[n] ~ categorical_logit(lambda[n]);
+ }
+
+}
+```
