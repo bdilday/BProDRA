@@ -24,13 +24,15 @@ This vignette discusses estimating the variance of the random effects of a mixed
 
 ### Data
 
-For this analysis I use a simplified version of DRA. It has five mutually exclusive event outcomes, instead of the 24 of DRA. It also uses a reduced set of predictors that are consistent across outcomes.
+For this analysis I use a simplified version of DRA. It has six mutually exclusive event outcomes, instead of the 24 of DRA. It also uses a reduced set of predictors that are consistent across outcomes.
 
 The event outcomes are:
 
 * Ball-in-play for an out
 
-* Ball-in-play for a hit
+* Ball-in-play for a single
+
+* Ball-in-play for an extra-base hit
 
 * Home run
 
@@ -69,7 +71,6 @@ The `xxxxb001` value in the `BAT_ID` field represents those low-PA players, and 
 
 ``` {r, echo=FALSE, message=FALSE}
 mods <- readRDS('../outputs/lme_mods_init2016.rds')
-
 ```
 
 I have a helper function to prepare the data for fitting with `stan`
@@ -125,21 +126,23 @@ In my encoding, the outcomes are given the following integer codes,
 
 * Ball in play for out => 1
 
-* Ball in play for hit => 2
+* Ball in play for single => 2
 
-* Home run => 3
+* Ball in play for an XB hit => 3
 
-* Strikeout => 4
+* Home run => 4
 
-* Base on balls => 5
+* Strikeout => 5
 
-The standard deviations of the predictors for the 5 outcomes are,
+* Base on balls => 6
+
+The standard deviations of the predictors for the 6 outcomes are,
 
 ``` {r}
-theta_df <- lapply(1:5, function(i) {
+theta_df <- lapply(1:6, function(i) {
   mods[[i]]@theta}
   ) %>% unlist %>% 
-  array(dim=c(3, 5)) %>% t %>% as.data.frame()
+  array(dim=c(3, 6)) %>% t %>% as.data.frame()
 
 names(theta_df) <- c("pitcher", "batter", "stadium")
 print(theta_df)
@@ -206,11 +209,11 @@ predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
   etas_key_e <- list()
 
   if (length(offset) == 1) {
-    offset <- rep(offset, 4)
+    offset <- rep(offset, 5)
   }
 
   denom <- 1
-  for (i in 1:4) {
+  for (i in 1:5) {
     etas_key_e[[i]] <-
       exp(t(t(ee$ALPHA[,i,ev$bid] + 
                 ee$ALPHA[,i,ev$pid] + 
@@ -218,9 +221,9 @@ predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
                 offset[[i]]) + ee$C[,i]))
     denom <- denom + etas_key_e[[i]]
   }
-  etas_key_e[[5]] <- 1
+  etas_key_e[[6]] <- 1
 
-  ll <- lapply(1:5, function(i) {etas_key_e[[i]] / denom})
+  ll <- lapply(1:6, function(i) {etas_key_e[[i]] / denom})
   ppA <- array(unlist(ll), dim=c(dim(ll[[1]]), length(ll)))
 }
 ```
@@ -249,7 +252,7 @@ runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
 
   player_events <- ans$ev[ndf_cc,]
   offset <- list()
-  for (i in 1:4) {
+  for (i in 1:5) {
     offset[[i]] <- ee$ALPHA[,i,id]
   }
 
@@ -259,7 +262,7 @@ runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
 
 }
 
-runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.573, 1.376, -0.28, 0.336)) {
+runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.496, 0.80, 1.376, -0.28, 0.336)) {
   dd <- dim(prediction_array)
   tmp <- array(rep(lw, each=dd[[1]] * dd[[2]]), dim=dd)
 
@@ -268,7 +271,7 @@ runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.573, 1.376, 
 
 ```
 
-The `0.573` linear weight value for balls-in-play for a hit is the average linear weight of singles, doubles, and triples, weighted by their league-wide frequency. In the next iteration of this model I'm planning to split those up in to singles and extra-base hits.
+The `0.80` linear weight value for balls-in-play for a hit is the average linear weight of doubles and triples, weighted by their league-wide frequency. 
 
 The `runs_from_stan` function returns a vector consisting of the derived linear weights values attributed to a particular player for each draw from the posterior probability distribution of the multinomial model. As an illustration, here is what the function returns for Mike Trout,
 
@@ -309,7 +312,7 @@ gg <- df1 %>%
   group_by(player_name) %>% 
   mutate(frac=n/sum(n), m=sum(ilw_runs * n)/sum(n)) %>% 
   ungroup() %>% 
-  ggplot(aes(x=ilw_runs, y=n, group=player_name)) + 
+  ggplot(aes(x=ilw_runs, y=frac, group=player_name)) + 
   geom_bar(stat='identity', width=1, fill='steelblue') + 
   theme_minimal() +
   theme(axis.title = element_text(size=16, face='bold'), axis.text = element_text(size=12)) +
@@ -384,7 +387,7 @@ parameters {
 }
 ```
 
-There are `K-1` outcomes because I fix the parameter value for the last outcome to zero. This technique assures that the probabilities for the five mutually exclusive outcomes sums to one. This is applied in the `transformed parameters` block.
+There are `K-1` outcomes because I fix the parameter value for the last outcome to zero. This technique assures that the probabilities for the six mutually exclusive outcomes sums to one. This is applied in the `transformed parameters` block.
 
 ```
 transformed parameters {

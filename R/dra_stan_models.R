@@ -1,7 +1,7 @@
 
 #' @export
 generate_event_data <- function(nlim = NULL, rseed=102, year=2016) {
-  ev <- load_events_data(year)
+  ev <- BProDRA::load_events_data(year)
 
   # rm pitchers as hitters
   ev %<>% filter(BAT_FLD_CD != 1)
@@ -30,16 +30,18 @@ generate_event_data <- function(nlim = NULL, rseed=102, year=2016) {
   cc_hr <- which(ev$EVENT_CD == 23)
   cc_so <- which(ev$EVENT_CD == 3)
   cc_bip0 <- which(ev$EVENT_CD == 2)
-  cc_bip1 <- which(ev$EVENT_CD >= 20 & ev$EVENT_CD <= 22)
+  cc_bip1 <- which(ev$EVENT_CD == 20)
+  cc_bip2 <- which(ev$EVENT_CD >= 21 & ev$EVENT_CD <= 22)
   cc_bb <- which(ev$EVENT_CD >= 14 & ev$EVENT_CD <= 16)
 
   ev$outcome <- NA
 
   ev[cc_bip0,]$outcome <- 1
   ev[cc_bip1,]$outcome <- 2
-  ev[cc_hr,]$outcome <- 3
-  ev[cc_so,]$outcome <- 4
-  ev[cc_bb,]$outcome <- 5
+  ev[cc_bip2,]$outcome <- 3
+  ev[cc_hr,]$outcome <- 4
+  ev[cc_so,]$outcome <- 5
+  ev[cc_bb,]$outcome <- 6
 
   assertthat::are_equal(sum(is.na(ev$outcome)), 0)
   ev %<>% mutate(bid=as.integer(as.factor(BAT_ID)))
@@ -140,7 +142,7 @@ get_init_fun <- function(ans) {
 #' @export
 do_stan_fit <- function(model_df, warmup=100, iter=500, seed=10101) {
   init_fun <- get_init_fun(model_df)
-    stan(file='inst/extdata/multinom_ravel.stan',
+    rstan::stan(file='inst/stan_models/multinomial_ravel.stan',
          model_name="multinom_iden",
          data=model_df,
          iter=iter,
@@ -162,8 +164,8 @@ predict_from_stan_X <- function(stan_mod, ans) {
   pp_mu <- t(t(alpha_m[ans$ev$bid,] + alpha_m[ans$ev$pid,] + alpha_m[ans$ev$sid,]) + c_m)
 
   nl <- dim(pp_mu)[[1]]
-  ll <- lapply(1:nl, function(i) {exp(pp_mu[i,]) / (sum(exp(pp_mu[i,1:5])))})
-  pp <- t(matrix(unlist(ll), nrow=5))
+  ll <- lapply(1:nl, function(i) {exp(pp_mu[i,]) / (sum(exp(pp_mu[i,1:6])))})
+  pp <- t(matrix(unlist(ll), nrow=6))
   pp
 }
 
@@ -191,7 +193,7 @@ runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
 
   player_events <- ans$ev[ndf_cc,]
   offset <- list()
-  for (i in 1:4) {
+  for (i in 1:5) {
     offset[[i]] <- ee$ALPHA[,i,id]
   }
 
@@ -203,7 +205,7 @@ runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
 
 
 #' @export
-runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.573, 1.376, -0.28, 0.336)) {
+runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.496, 0.80, 1.376, -0.28, 0.336)) {
   dd <- dim(prediction_array)
   tmp <- array(rep(lw, each=dd[[1]] * dd[[2]]), dim=dd)
 
@@ -219,18 +221,18 @@ predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
   etas_key_e <- list()
 
   if (length(offset) == 1) {
-    offset <- rep(offset, 4)
+    offset <- rep(offset, 5)
   }
 
   denom <- 1
-  for (i in 1:4) {
+  for (i in 1:5) {
     etas_key_e[[i]] <-
       exp(t(t(ee$ALPHA[,i,ev$bid] + ee$ALPHA[,i,ev$pid] + ee$ALPHA[,i,ev$sid] - offset[[i]]) + ee$C[,i]))
     denom <- denom + etas_key_e[[i]]
   }
-  etas_key_e[[5]] <- 1
+  etas_key_e[[6]] <- 1
 
-  ll <- lapply(1:5, function(i) {etas_key_e[[i]] / denom})
+  ll <- lapply(1:6, function(i) {etas_key_e[[i]] / denom})
   ppA <- array(unlist(ll), dim=c(dim(ll[[1]]), length(ll)))
 
 }
