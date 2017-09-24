@@ -7,6 +7,6 @@ run_it <- function() {
   model_df <- BProDRA::update_ans(model_df, mods)
   options(mc.cores = parallel::detectCores())
   rstan_options(auto_write = TRUE)
-  do_stan_fit()
+  do_stan_fit(model_df)
 
 }

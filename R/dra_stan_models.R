@@ -142,7 +142,7 @@ get_init_fun <- function(ans) {
 #' @export
 do_stan_fit <- function(model_df, warmup=100, iter=500, seed=10101) {
   init_fun <- get_init_fun(model_df)
-    rstan::stan(file='inst/stan_models/multinomial_ravel.stan',
+    rstan::stan(file=system.file('stan_models/multinomial_ravel.stan', package='BProDRA'),
          model_name="multinom_iden",
          data=model_df,
          iter=iter,
