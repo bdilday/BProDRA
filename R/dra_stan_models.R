@@ -105,6 +105,32 @@ initialize_with_lme4 <- function(model_df,
 }
 
 #' @export
+initialize_with_lme4_par <- function(model_df,
+                                     frm=as.formula('outcome ~ (1|bid) + (1|pid) + (1|sid)')) {
+
+  unique_outcomes <- unique(model_df$outcome) %>% sort()
+  mods <- foreach(i=1:length(unique_outcomes)) %dopar% {
+    u <- unique_outcomes[[i]]
+    message(sprintf('fitting model for outcome: %d \n', u))
+    cc <- which(model_df$outcome == u)
+    stopifnot(length(cc) > 0)
+    tmp <- model_df
+    tmp[cc,]$outcome <- 1
+    tmp[-cc,]$outcome <- 0
+    glmer_mod <- glmer(frm, data=tmp,
+                       nAGQ = 0,
+                       family = binomial,
+                       control=glmerControl(optimizer = "nloptwrap")
+    )
+#    mods[[as.character(u)]] <- glmer_mod
+    glmer_mod
+  }
+
+  mods
+
+}
+
+#' @export
 update_ans <- function(ans, mods) {
   nl <- length(names(mods))
 
@@ -140,9 +166,9 @@ get_init_fun <- function(ans) {
 }
 
 #' @export
-do_stan_fit <- function(model_df, warmup=100, iter=500, seed=10101) {
+do_stan_fit <- function(model_df, warmup=150, iter=500, seed=10101) {
   init_fun <- get_init_fun(model_df)
-    rstan::stan(file=system.file('stan_models/multinomial_ravel.stan', package='BProDRA'),
+    rstan::stan(file=system.file('stan_models/multinomial_nonfixed_variance.stan', package='BProDRA'),
          model_name="multinom_iden",
          data=model_df,
          iter=iter,
