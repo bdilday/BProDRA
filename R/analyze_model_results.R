@@ -23,7 +23,8 @@ get_all_batter_runs <- function(event_data, mods) {
     tmp
   }
   )
-  dra_runs <- purrr::reduce(ll, rbind.data.frame)
+
+  dra_runs <- dplyr::bind_rows(ll)
 
   }
 

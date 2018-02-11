@@ -1,4 +1,6 @@
 
+#' @importFrom magrittr %>%
+#'
 #' @export
 generate_event_data <- function(nlim = NULL, rseed=102, year=2016) {
   ev <- BProDRA::load_events_data(year)
@@ -260,5 +262,30 @@ predict_from_stan <- function(stan_mod, ev, ee=NULL, offset = 0) {
 
   ll <- lapply(1:6, function(i) {etas_key_e[[i]] / denom})
   ppA <- array(unlist(ll), dim=c(dim(ll[[1]]), length(ll)))
+}
+
+#' @export
+get_stan_results <- function(model_df, stan_mod, res_type='bid') {
+  ee <- rstan::extract(stan_mod)
+
+  if (res_type == 'bid') {
+    pids <- unique(model_df$ev$BAT_ID)
+  } else if (res_type == 'pid') {
+    pids <- unique(model_df$ev$PIT_ID)
+  } else if (res_type == 'sid'){
+    pids <- unique(model_df$ev$HOME_TEAM_ID)
+  } else {
+    warning('res_type not supported: ', res_type)
+    return(NULL)
+  }
+
+  ll <- lapply(1:length(pids), function(i) {
+    b <- pids[i]
+    message(b, " ", i, " ", length(pids))
+    lw_runs <- runs_from_stan(model_df, stan_mod, res_type, b, ee=ee)
+    list(res_type=res_type, pid=b, mean_runs=mean(lw_runs), sd_runs=sd(lw_runs))
+  })
+
+  dplyr::bind_rows(ll)
 
 }

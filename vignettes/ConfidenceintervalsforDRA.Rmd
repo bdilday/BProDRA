@@ -263,6 +263,9 @@ runs_from_stan <- function(ans, stan_mod, ranef_name, ranef_key, ee=NULL) {
 }
 
 runs_from_predictions <- function(prediction_array, lw = c(-0.28, 0.496, 0.80, 1.376, -0.28, 0.336)) {
+  if (is.null(lw)) {
+    lw <- get_linear_weights()
+  }
   dd <- dim(prediction_array)
   tmp <- array(rep(lw, each=dd[[1]] * dd[[2]]), dim=dd)
 
